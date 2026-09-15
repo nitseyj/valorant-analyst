@@ -1,0 +1,31 @@
+# Raw dataset — large (~1.3GB), and re-downloadable from source
+# (see backend/data/README.md for the Kaggle link)
+backend/data/raw/
+backend/data/processed/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Node (if/when the real React+Vite frontend gets built)
+node_modules/
+dist/
+.vite/
+
+# Logs
+*.log
