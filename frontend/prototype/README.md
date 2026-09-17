@@ -1,50 +1,23 @@
-# Complete current state — replace everything with this
+# Frontend (legacy prototype)
 
-You're missing pieces from a few different updates, so rather than
-tracking down which file came from which version, just replace
-everything with what's in this zip.
+A dependency-free, single-file HTML/CSS/JS build of the UI — no build step,
+no `npm install`, just open `index.html` directly in a browser. Kept
+alongside the real [`frontend/web/`](../web) app as a zero-install fallback
+and reference.
 
-## What's in here
+## Usage
 
-```
-index.html                                    → your frontend/prototype/index.html
-backend/app/main.py                           → backend/app/main.py
-backend/app/analyzers/*.py (11 files)         → backend/app/analyzers/ (replace all)
-backend/__init__.py, app/__init__.py,
-  app/analyzers/__init__.py                   → same locations (empty files, required)
-backend/scripts_load_match_analyzer.py        → scripts/load_match_analyzer.py
-```
+Open `index.html` in a browser. It connects to the FastAPI backend
+automatically if it's running at `http://127.0.0.1:8000`, and falls back to
+embedded demo data otherwise.
 
-## Steps
+## Notes
 
-1. **Delete** the contents of your `backend/app/analyzers/` folder and
-   copy in all 11 `.py` files from here, plus `__init__.py`.
-2. **Replace** `backend/app/main.py`.
-3. **Replace** `backend/__init__.py` and `backend/app/__init__.py` (just
-   in case — these must exist, even empty, for imports to work).
-4. **Replace** `frontend/prototype/index.html`.
-5. **Replace** `scripts/load_match_analyzer.py` with
-   `backend/scripts_load_match_analyzer.py` from here (renamed — it's
-   named that way here only so it doesn't collide with anything during
-   copying).
-6. **Re-run the ETL** if you haven't since the `player_game_agents` fix:
-   ```
-   python scripts/load_match_analyzer.py backend/data/raw vct_2025 --out backend/data/valorant_test_2025.db --schema backend/app/database/schema.sql
-   ```
-   (adjust paths to match your actual folders)
-7. Restart the server: `python -m uvicorn app.main:app --reload`
-8. Open `http://127.0.0.1:8000/docs` — you should see 12 routes listed,
-   including `/roster-builder/simulate`, `/players/search`, and
-   `/stats/meta`. If you see all 12, you're fully current.
-
-## What this gets you that you were missing
-
-- The Legacy Roster Builder actually working (was 404ing before —
-  your `main.py` didn't have the route yet)
-- The rich player dropdown (team logo → portrait → name) when building
-  lineups
-- The Analytics page (Agent Meta — pick rates, role distribution)
-- The Clutch Factor analyzer on match verdicts
-- Several real bug fixes from along the way — waylay's role, the
-  pick-rate math, the `player_game_agents` ETL gap, the `loadout_value`
-  string-parsing bug, and others documented in earlier READMEs
+- All icons, backgrounds, and decorative graphics are hand-written inline
+  SVG/CSS — no external image files, no icon font. The only real image
+  assets loaded are team logos (`assets/valorant/teams/<slug>.<ext>`), which
+  fall back to a generated initials badge if missing.
+- Player portraits are an original geometric silhouette, not a photo — see
+  the root `README.md` for why (Riot IP / no sourced likenesses).
+- `frontend/web/` is where active development happens now; this file is
+  kept in sync only loosely and may lag behind new features.

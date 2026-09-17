@@ -189,6 +189,20 @@
   .hud-corner.tl{ top:12px; left:12px; border-top:2px solid var(--amber); border-left:2px solid var(--amber); }
   .hud-corner.br{ bottom:12px; right:40px; border-bottom:2px solid var(--blue); border-right:2px solid var(--blue); }
 
+  /* ambient corner illustration accent — purely decorative, never tied to
+     specific data (see agent_jett.jpg / agent_reyna.jpg usage), so an
+     incomplete agent set never implies something factual about a page. */
+  .deco-illus{
+    position:absolute; bottom:0; right:0; height:96px; width:auto;
+    opacity:0.14; filter:grayscale(35%); pointer-events:none;
+    -webkit-mask-image:linear-gradient(90deg, transparent, #000 55%);
+            mask-image:linear-gradient(90deg, transparent, #000 55%);
+  }
+  .deco-scanline{ position:absolute; inset:0; opacity:0.05; pointer-events:none; color:var(--ink); }
+  .deco-dots{ color:var(--amber); opacity:0.5; }
+  .deco-crosshair{ color:var(--blue); opacity:0.45; }
+  .deco-divider{ display:block; width:100%; height:12px; color:var(--line); margin:4px 0 18px; }
+
   .topline{
     height:3px;
     background: linear-gradient(90deg, var(--amber) 0%, var(--amber) 46%, var(--violet) 50%, var(--blue) 54%, var(--blue) 100%);
@@ -394,14 +408,16 @@
   <div class="main-content">
 
   <div id="view-home">
-    <div class="fade-up in" style="margin-bottom:24px; display:flex; align-items:flex-start; justify-content:space-between; gap:20px;">
-      <div>
+    <div class="fade-up in" style="position:relative; margin-bottom:24px; display:flex; align-items:flex-start; justify-content:space-between; gap:20px; overflow:hidden; padding:4px 4px 4px 0;">
+      <svg class="deco-scanline" preserveAspectRatio="none" viewBox="0 0 160 40" fill="none"><path d="M0 2h160M0 10h160M0 18h160M0 26h160M0 34h160" stroke="currentColor" stroke-width="1"/></svg>
+      <img class="deco-illus" src="assets/ui/illustrations/agent_jett.jpg" alt="" aria-hidden="true" loading="lazy" onerror="this.remove()">
+      <div style="position:relative;">
         <h1 class="font-display" style="font-size:28px; font-weight:700; margin:0 0 6px;">Match debrief</h1>
         <p style="color:var(--ink-dim); font-size:14px; margin:0; max-width:52ch;">
           Every verdict is built from round-by-round data, not a guess — each ranked factor links back to the evidence that produced it.
         </p>
       </div>
-      <svg width="46" height="46" viewBox="0 0 46 46" style="flex-shrink:0; opacity:0.5; margin-top:4px;">
+      <svg width="46" height="46" viewBox="0 0 46 46" style="position:relative; flex-shrink:0; opacity:0.5; margin-top:4px;">
         <circle cx="23" cy="23" r="21" stroke="var(--amber)" stroke-width="1"/>
         <circle cx="23" cy="23" r="13" stroke="var(--blue)" stroke-width="1"/>
         <line x1="23" y1="0" x2="23" y2="10" stroke="var(--ink-faint)" stroke-width="1"/>
@@ -447,12 +463,15 @@
   </div>
 
   <div id="view-legacy" style="display:none;">
-    <div class="section-eyebrow" style="font-size:22px;">Legacy Roster Builder</div>
-    <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px; max-width:64ch;">
-      Build two hypothetical 5-player lineups from any players in the loaded season and see a model
-      projection of the matchup. This is not a prediction of a real result — see the caveats below
-      every projection for exactly what is and isn't accounted for.
-    </p>
+    <div style="position:relative; padding-right:60px; overflow:hidden;">
+      <img class="deco-illus" src="assets/ui/illustrations/agent_reyna.jpg" alt="" aria-hidden="true" loading="lazy" onerror="this.remove()">
+      <div class="section-eyebrow" style="font-size:22px;">Legacy Roster Builder <svg class="deco-crosshair" width="26" height="26" viewBox="0 0 40 40" fill="none" stroke="currentColor"><circle cx="20" cy="20" r="12"/><path d="M20 0v10M20 30v10M0 20h10M30 20h10"/></svg></div>
+      <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px; max-width:64ch;">
+        Build two hypothetical 5-player lineups from any players in the loaded season and see a model
+        projection of the matchup. This is not a prediction of a real result — see the caveats below
+        every projection for exactly what is and isn't accounted for.
+      </p>
+    </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;" class="legacy-cols">
       <div class="cut-panel" style="padding:18px 20px;">
         <div class="font-mono" style="font-size:11px; color:var(--amber); margin-bottom:12px;">LINEUP A</div>
@@ -471,7 +490,7 @@
   </div>
 
   <div id="view-analytics" style="display:none;">
-    <div class="section-eyebrow" style="font-size:22px;">Analytics — Agent Meta</div>
+    <div class="section-eyebrow" style="font-size:22px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><rect x="7" y="12" width="2.5" height="5"/><rect x="11" y="9" width="2.5" height="8"/><rect x="15" y="6" width="2.5" height="11"/></svg>Analytics — Agent Meta <svg class="deco-dots" width="22" height="14" viewBox="0 0 30 20" fill="currentColor"><circle cx="3" cy="3" r="2"/><circle cx="13" cy="3" r="2"/><circle cx="23" cy="3" r="2"/><circle cx="3" cy="13" r="2"/><circle cx="13" cy="13" r="2"/><circle cx="23" cy="13" r="2"/></svg></div>
     <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px; max-width:64ch;">
       Pick rates across every loaded map this season. "Pick rate" is per team-map slot — two teams
       pick independently on every map, so the max possible rate for a universally-picked agent is 100%.
@@ -3262,6 +3281,27 @@ function mapGlyph(mapName){
   return `<svg width="13" height="13" viewBox="0 0 24 24" fill="var(--ink-faint)" stroke="var(--ink-faint)">${shape}</svg>`;
 }
 
+// Small icon set from the UI asset pack — inlined as SVG (same convention as
+// every other icon in this file: no external file, currentColor-driven so
+// it themes for free). Only the genuinely new glyphs from the pack are used
+// here — its nav-icon set (home/players/teams/matches/analytics/legacy/
+// search) turned out to be pixel-identical to the icons already above, so
+// there was nothing to swap there.
+function versusIcon(){
+  return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px; margin:0 1px;" role="img" aria-label="vs"><path d="M5 5h5l4 14h5"/><path d="M19 5h-5l-4 14H5"/></svg>`;
+}
+function trophyIcon(color){
+  return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color||'currentColor'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px;" aria-hidden="true"><path d="M8 4h8v4c0 4-2 6-4 6s-4-2-4-6z"/><path d="M8 6H4v2c0 2 1.5 4 4 4M16 6h4v2c0 2-1.5 4-4 4M12 14v4M8 21h8"/></svg>`;
+}
+// Note: chartIcon()/decoDots()/decoCrosshair()/decoScanline() were removed
+// here — they were only ever called from static (non-templated) HTML
+// sections where `${fn()}` doesn't evaluate, so each call site already
+// carries its own literal inlined SVG markup instead (see the Analytics
+// and Legacy Roster Builder headers, and the Home hero block).
+function decoDivider(){
+  return `<svg class="deco-divider" viewBox="0 0 120 12" preserveAspectRatio="none" fill="none"><path d="M0 6h120" stroke="var(--line)" stroke-width="1"/><path d="M50 6h20" stroke="var(--amber)" stroke-width="3"/></svg>`;
+}
+
 // Buy-tier silhouettes for economy evidence — generic weapon silhouettes,
 // not any specific in-game weapon/skin model.
 const TIER_ICON = {
@@ -3408,7 +3448,7 @@ function renderList(matches){
           ${teamBadge(m.team_a, m.winner===m.team_a ? 'amber':'blue')}
           <div style="min-width:0;">
             <div class="font-display" style="font-size:16px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${m.team_a} <span style="color:var(--ink-faint); font-weight:500;">vs</span> ${m.team_b}
+              ${m.team_a} <span style="color:var(--ink-faint); font-weight:500;">${versusIcon()}</span> ${m.team_b}
             </div>
             <div style="font-size:12px; color:var(--ink-dim); margin-top:2px; display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${subtitle}
@@ -3485,7 +3525,7 @@ function renderSpotlight(matches){
       SPOTLIGHT MATCH
     </div>
     <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
-      <div class="font-display" style="font-size:19px; font-weight:700;">${top.team_a} <span style="color:var(--ink-faint); font-weight:500;">vs</span> ${top.team_b}</div>
+      <div class="font-display" style="font-size:19px; font-weight:700;">${top.team_a} <span style="color:var(--ink-faint); font-weight:500;">${versusIcon()}</span> ${top.team_b}</div>
       <div class="font-mono" style="font-size:22px; font-weight:600;">${matchScoreStr(top)}</div>
     </div>
     <p style="font-size:13px; color:var(--ink-dim); margin:10px 0 0; line-height:1.5; max-width:64ch;">${top.primary_factor.summary}</p>
@@ -3678,12 +3718,12 @@ function renderVerdict(id){
         <div class="hero-row">
           <div class="hero-team">
             <span class="hero-badge-scale">${teamBadge(m.team_a, m.winner===m.team_a?'amber':'blue')}</span>
-            <div class="hero-name">${m.team_a}</div>
+            <div class="hero-name">${m.winner===m.team_a ? trophyIcon('var(--amber)') : ''}${m.team_a}</div>
           </div>
           <div class="hero-score">${m.score.replace('-',' — ')}</div>
           <div class="hero-team right">
             <span class="hero-badge-scale">${teamBadge(m.team_b, m.winner===m.team_b?'amber':'blue')}</span>
-            <div class="hero-name">${m.team_b}</div>
+            <div class="hero-name">${m.winner===m.team_b ? trophyIcon('var(--amber)') : ''}${m.team_b}</div>
           </div>
         </div>
 
@@ -3722,6 +3762,7 @@ function renderVerdict(id){
         </div>
       </div>
 
+      ${decoDivider()}
       <div class="section-eyebrow">Ranked factors</div>
       ${ranked}
       ${skipped ? `<div style="margin-top:10px;">${skipped}</div>` : ''}
@@ -4031,7 +4072,7 @@ function renderTeamProfile(p){
       <div class="match-card" style="padding:14px 18px; margin-bottom:8px;" onclick="showVerdict('${m.match_id}')">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
           <div style="min-width:0;">
-            <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.team_a} <span style="color:var(--ink-faint); font-weight:400;">vs</span> ${m.team_b}</div>
+            <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.team_a} <span style="color:var(--ink-faint); font-weight:400;">${versusIcon()}</span> ${m.team_b}</div>
             <div style="font-size:11px; color:var(--ink-faint); margin-top:2px;">${m.tournament} — ${m.match_type}</div>
           </div>
           <div class="font-mono" style="font-size:14px; font-weight:600; flex-shrink:0;">${m.score}</div>
@@ -4288,6 +4329,12 @@ function renderPlayerDropdown(prefix, i, players){
   const dd = document.getElementById(`${prefix}-${i}-dd`);
   const color = prefix === 'la' ? 'var(--amber)' : 'var(--blue)';
   if(!players || players.length === 0){ dd.classList.remove('open'); dd.innerHTML=''; return; }
+  // .player-dropdown is position:absolute and doesn't reserve layout space,
+  // so it floats over whatever sits below it — including the next lineup
+  // slot's input. With per-input debouncing (see onPlayerInput), more than
+  // one of these can now genuinely be open at once, and two overlapping
+  // dropdowns read as one garbled list. Keep at most one open at a time.
+  document.querySelectorAll('.player-dropdown.open').forEach(el => { if(el !== dd) el.classList.remove('open'); });
   dd.innerHTML = players.map(p => `
     <div class="player-dropdown-row" onclick="selectPlayer('${prefix}', ${i}, '${p.name.replace(/'/g,"\\'")}')">
       <div class="dd-badge-scale">${teamBadge(p.team || 'Unknown', prefix==='la'?'amber':'blue')}</div>
@@ -4313,12 +4360,17 @@ document.addEventListener('click', (e) => {
   }
 });
 
-let _playerSearchDebounce = null;
+// Keyed per-input (not a single shared timer) — a shared timer would cancel
+// slot 1's pending search the moment the user tabs to slot 2 and types there,
+// silently leaving slot 1's dropdown empty. Filling 5 lineup slots in quick
+// succession is the normal workflow here, so this isn't an edge case.
+const _playerSearchDebounce = {};
 function onPlayerInput(prefix, i){
-  clearTimeout(_playerSearchDebounce);
-  const val = document.getElementById(`${prefix}-${i}`).value;
+  const key = `${prefix}-${i}`;
+  clearTimeout(_playerSearchDebounce[key]);
+  const val = document.getElementById(key).value;
   if(!val || val.length < 2){ renderPlayerDropdown(prefix, i, []); return; }
-  _playerSearchDebounce = setTimeout(async () => {
+  _playerSearchDebounce[key] = setTimeout(async () => {
     let players = [];
     try{
       const res = await fetch(`${API_BASE}/players/search?q=${encodeURIComponent(val)}`, { signal: AbortSignal.timeout(1500) });

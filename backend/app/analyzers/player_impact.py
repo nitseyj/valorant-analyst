@@ -71,6 +71,44 @@ def _player_rows(conn, game_id):
     return cur.fetchall()
 
 
+def _aggregate_across_maps(players):
+    """Collapse per-map rows into one row per player across the series —
+    rate-like stats (rating, acs) are averaged across the maps they
+    actually played, count-like stats (kills, deaths, clutches, multi-
+    kills) are summed. Without this, picking the MVP/dud straight out of
+    the pooled per-map rows just returns whoever's single BEST (or worst)
+    map happened to be, mislabeled as "the series" — the opposite of the
+    consistency-over-one-map-hot-streak this module is meant to reward."""
+    by_player = {}
+    for p in players:
+        name, team_id = p[0], p[1]
+        agg = by_player.setdefault((name, team_id), {
+            "rating_sum": 0.0, "rating_n": 0, "acs_sum": 0.0, "acs_n": 0,
+            "kills": 0, "deaths": 0, "clutches": 0, "big_multikills": 0,
+        })
+        if p[2] is not None:
+            agg["rating_sum"] += p[2]
+            agg["rating_n"] += 1
+        if p[3] is not None:
+            agg["acs_sum"] += p[3]
+            agg["acs_n"] += 1
+        agg["kills"] += p[7] or 0
+        agg["deaths"] += p[8] or 0
+        agg["clutches"] += p[11] or 0
+        agg["big_multikills"] += p[12] or 0
+
+    out = []
+    for (name, team_id), agg in by_player.items():
+        rating = agg["rating_sum"] / agg["rating_n"] if agg["rating_n"] else None
+        acs = agg["acs_sum"] / agg["acs_n"] if agg["acs_n"] else None
+        out.append((
+            name, team_id, rating, acs, None, None, None,
+            agg["kills"], agg["deaths"], None, None,
+            agg["clutches"], agg["big_multikills"],
+        ))
+    return out
+
+
 def _build_result(map_label, team_a_id, team_a_name, team_b_id, team_b_name, players):
     if not players:
         raise ValueError(f"no player_game_stats rows found for {map_label}")
@@ -166,14 +204,16 @@ def analyze_match(conn: sqlite3.Connection, match_id: int) -> dict:
     if not game_ids:
         raise ValueError(f"match_id {match_id} has no games loaded")
 
-    # pool every player-game row across the whole series, then reuse the
-    # same ranking/averaging logic as a single "virtual map" — this naturally
-    # rewards consistency across maps, not just a one-map hot streak
+    # pool every player-game row across the whole series, then collapse to
+    # one row per player (see _aggregate_across_maps) before reusing the
+    # same ranking/averaging logic as a single "virtual map" — this is what
+    # actually rewards consistency across maps, not just a one-map hot streak
     all_players = []
     for gid in game_ids:
         all_players.extend(_player_rows(conn, gid))
+    series_players = _aggregate_across_maps(all_players)
 
-    return _build_result(f"the series", team_a_id, team_a_name, team_b_id, team_b_name, all_players)
+    return _build_result(f"the series", team_a_id, team_a_name, team_b_id, team_b_name, series_players)
 
 
 if __name__ == "__main__":

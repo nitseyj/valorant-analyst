@@ -55,6 +55,30 @@ def log(msg):
     print(f"  {msg}")
 
 
+def build_year_lookup(df, name_col, id_col):
+    """{name: id} for names that are unambiguous within this year's id file,
+    plus the count of rows excluded because their name was ambiguous.
+
+    Every per-year id file used here (teams_ids.csv, players_ids.csv) has
+    been verified to have zero duplicate names for the years this has
+    actually been run against — that's what makes resolving by name safe
+    at all (see the module docstring). But a `dict(zip(...))` built
+    directly from a duplicated column silently keeps whichever row happens
+    to be last, with no error and no signal that anything was wrong — so
+    if a future year's data ever breaks that invariant, rows would get
+    silently attributed to the wrong team/player instead of being skipped.
+    Excluding ambiguous names here instead means `.get(name)` returns None
+    for them, same as a genuinely unknown name, and they fall into the
+    existing "unknown"-style skip counters already checked at every call
+    site — never a silent guess.
+    """
+    counts = df[name_col].value_counts()
+    ambiguous_names = set(counts[counts > 1].index)
+    safe_rows = df[~df[name_col].isin(ambiguous_names)]
+    lookup = dict(zip(safe_rows[name_col], safe_rows[id_col]))
+    return lookup, len(ambiguous_names)
+
+
 def normalize_tournament(name):
     """
     Some source files (observed: eco_rounds.csv) use a different tournament
@@ -127,10 +151,10 @@ def main():
     log(f"{stats['teams']} teams loaded (global reference set)")
 
     teams_ids_year = pd.read_csv(yr / "ids/teams_ids.csv")
-    team_id_by_name = dict(zip(teams_ids_year["Team"], teams_ids_year["Team ID"]))
-    dup_check = teams_ids_year["Team"].duplicated().sum()
+    team_id_by_name, ambiguous_team_names = build_year_lookup(teams_ids_year, "Team", "Team ID")
     log(f"{len(team_id_by_name)} team names resolvable unambiguously for {args.year_folder} "
-        f"({dup_check} duplicate names within this year, if any — investigate before trusting resolution if >0)")
+        f"({ambiguous_team_names} ambiguous name(s) excluded, if any — those rows will be skipped "
+        f"downstream as unknown-team, not misattributed)")
 
     # -----------------------------------------------------------------
     print("Loading players...")
@@ -153,10 +177,10 @@ def main():
     log(f"{stats['players']} players loaded (global reference set)")
 
     players_ids_year = pd.read_csv(yr / "ids/players_ids.csv")
-    player_id_by_name = dict(zip(players_ids_year["Player"], players_ids_year["Player ID"]))
-    dup_check = players_ids_year["Player"].duplicated().sum()
+    player_id_by_name, ambiguous_player_names = build_year_lookup(players_ids_year, "Player", "Player ID")
     log(f"{len(player_id_by_name)} player names resolvable unambiguously for {args.year_folder} "
-        f"({dup_check} duplicate names within this year, if any — investigate before trusting resolution if >0)")
+        f"({ambiguous_player_names} ambiguous name(s) excluded, if any — those rows will be skipped "
+        f"downstream as unknown-player, not misattributed)")
 
     # -----------------------------------------------------------------
     print("Loading tournaments/stages...")
@@ -353,7 +377,7 @@ def main():
     conn.commit()
     log(f"{stats['player_game_stats']} player_game_stats rows loaded")
     log(f"  skipped: no_game={skipped['pstats_no_game']}, unknown_team={skipped['pstats_unknown_team']}, "
-        f"unknown_player={skipped['pstats_unknown_player']}, ambiguous_player={skipped['pstats_ambiguous_player']}")
+        f"unknown_player={skipped['pstats_unknown_player']} (includes any ambiguous names excluded above)")
 
     # -----------------------------------------------------------------
     print("Loading player game impact (kills_stats.csv)...")

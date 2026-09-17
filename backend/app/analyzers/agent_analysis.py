@@ -157,8 +157,14 @@ def analyze_match(conn: sqlite3.Connection, match_id: int) -> dict:
         raise ValueError(f"match_id {match_id} has no games loaded")
 
     a_comps, b_comps = [], []
-    per_map_summaries = []
-    any_missing_role_flag = None
+    # Tracks the identity of whichever team/map first showed a role gap
+    # directly (not as a formatted string) — see the winner assignment
+    # below for why. Only the first gap found is kept: with more than one
+    # coverage gap in a series, "most recent map processed" isn't a
+    # meaningful way to pick which one matters more, so keep it deterministic
+    # instead by always keeping the first one found (games are iterated in
+    # game_id order).
+    missing_role_event = None
     for gid, map_name in games:
         a_comp = _comp_for(conn, gid, team_a_id)
         b_comp = _comp_for(conn, gid, team_b_id)
@@ -168,10 +174,11 @@ def analyze_match(conn: sqlite3.Connection, match_id: int) -> dict:
         b_comps.append((map_name, b_comp))
         a_missing = _missing_core_roles(_role_breakdown(a_comp))
         b_missing = _missing_core_roles(_role_breakdown(b_comp))
-        if a_missing and not b_missing:
-            any_missing_role_flag = f"{team_a_name} played {map_name} without a {'/'.join(a_missing)}"
-        elif b_missing and not a_missing:
-            any_missing_role_flag = f"{team_b_name} played {map_name} without a {'/'.join(b_missing)}"
+        if missing_role_event is None:
+            if a_missing and not b_missing:
+                missing_role_event = {"gap_team": team_a_name, "opponent": team_b_name, "map": map_name, "missing": a_missing}
+            elif b_missing and not a_missing:
+                missing_role_event = {"gap_team": team_b_name, "opponent": team_a_name, "map": map_name, "missing": b_missing}
 
     if not a_comps:
         raise ValueError(f"match_id {match_id}: no composition data loaded for any map")
@@ -181,15 +188,22 @@ def analyze_match(conn: sqlite3.Connection, match_id: int) -> dict:
 
     parts = [f"Across {len(a_comps)} map(s), {team_a_name} used {len(a_unique_agents)} unique agent(s), "
              f"{team_b_name} used {len(b_unique_agents)}."]
-    if any_missing_role_flag:
-        parts.append(any_missing_role_flag + " — a real coverage gap.")
+    if missing_role_event:
+        parts.append(
+            f"{missing_role_event['gap_team']} played {missing_role_event['map']} without a "
+            f"{'/'.join(missing_role_event['missing'])} — a real coverage gap."
+        )
     summary = " ".join(parts)
 
     winner = None
     impact = 0.1
-    if any_missing_role_flag:
+    if missing_role_event:
         impact = 0.25
-        winner = team_b_name if team_a_name in any_missing_role_flag else team_a_name
+        # the team WITHOUT the gap gets credited, identified directly from
+        # the event rather than by substring-matching team names into a
+        # formatted sentence (that broke whenever one team's name was a
+        # substring of the other's, e.g. "Cloud9" vs "Cloud9 Academy")
+        winner = missing_role_event["opponent"]
 
     evidence = [
         Evidence("Unique Agents Used", len(a_unique_agents), len(b_unique_agents)),
