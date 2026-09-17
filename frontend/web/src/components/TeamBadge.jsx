@@ -14,6 +14,21 @@ export default function TeamBadge({ name, accent = 'brand', size = 40, className
   const [extIndex, setExtIndex] = useState(0)
   const [failed, setFailed] = useState(false)
 
+  // Views like MatchVerdict/TeamProfile don't remount when you navigate to
+  // a different match/team (no `key` on them in App.jsx) — they just
+  // re-render with new props. Without this, a team whose logo failed to
+  // load would leave extIndex/failed stuck, so the *next* team rendered in
+  // that same slot never even attempts its own (possibly perfectly valid)
+  // logo file. Reset synchronously during render when the identity changes
+  // — the React-documented way to do this without an extra effect-driven
+  // render. See https://react.dev/learn/you-might-not-need-an-effect
+  const [trackedSlug, setTrackedSlug] = useState(slug)
+  if (slug !== trackedSlug) {
+    setTrackedSlug(slug)
+    setExtIndex(0)
+    setFailed(false)
+  }
+
   const color = accent === 'brand' ? 'var(--color-brand)' : 'var(--color-team-b)'
   const soft = accent === 'brand' ? 'var(--color-brand-dim)' : 'var(--color-team-b-dim)'
   const line = accent === 'brand' ? 'var(--color-brand-line)' : 'var(--color-team-b-line)'

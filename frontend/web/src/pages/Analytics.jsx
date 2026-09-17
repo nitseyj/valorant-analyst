@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
 import { getMeta } from '../lib/api'
 import { ROLE_COLOR } from '../lib/roles'
-import { ChartIcon, RoleGlyph, DotsDeco } from '../components/icons'
-import { Panel, ImpactBar, EmptyState, LoadingState } from '../components/ui'
+import { ChartIcon, DotsDeco } from '../components/icons'
+import { Panel, ImpactBar, EmptyState, LoadingState, Select } from '../components/ui'
+import AgentImage from '../components/AgentImage'
 
 export default function Analytics() {
   const [meta, setMeta] = useState(null)
+  const [year, setYear] = useState(null)
+  const [map, setMap] = useState(null)
 
   useEffect(() => {
-    getMeta().then(setMeta)
-  }, [])
+    setMeta(null)
+    getMeta({ year, map }).then(setMeta)
+  }, [year, map])
+
+  const scopeLabel = [year, map].filter(Boolean).join(' · ') || 'ALL SEASONS'
 
   return (
     <div className="fade-up">
@@ -18,10 +24,25 @@ export default function Analytics() {
         Analytics — Agent Meta
         <DotsDeco className="text-brand opacity-50" />
       </div>
-      <p className="text-[13px] text-ink-dim mb-5 max-w-2xl">
-        Pick rates across every loaded map this season. "Pick rate" is per team-map slot — two teams pick
-        independently on every map, so the max possible rate for a universally-picked agent is 100%.
+      <p className="text-[13px] text-ink-dim mb-4 max-w-2xl">
+        Pick rates across every loaded map. "Pick rate" is per team-map slot — two teams pick independently
+        on every map, so the max possible rate for a universally-picked agent is 100%.
       </p>
+
+      <div className="flex flex-wrap gap-2 mb-5">
+        <Select
+          value={year}
+          onChange={setYear}
+          placeholder="All seasons"
+          options={(meta?.available_years || []).map((y) => ({ value: y, label: String(y) }))}
+        />
+        <Select
+          value={map}
+          onChange={setMap}
+          placeholder="All maps"
+          options={(meta?.available_maps || []).map((m) => ({ value: m, label: m }))}
+        />
+      </div>
 
       {meta === null && <LoadingState />}
 
@@ -51,13 +72,13 @@ export default function Analytics() {
           )}
 
           <Panel className="p-5">
-            <div className="font-mono text-[11px] text-ink-faint mb-3.5">AGENT PICK RATES — SEASON</div>
-            {meta.agent_meta?.length === 0 && <EmptyState>No agent pick data loaded.</EmptyState>}
+            <div className="font-mono text-[11px] text-ink-faint mb-3.5">AGENT PICK RATES — {scopeLabel}</div>
+            {meta.agent_meta?.length === 0 && <EmptyState>No agent pick data loaded for this filter.</EmptyState>}
             {meta.agent_meta?.map((a) => {
               const color = ROLE_COLOR[a.role] || 'var(--color-ink-faint)'
               return (
                 <div key={a.agent} className="flex items-center gap-2.5 py-1.5 border-t border-line-soft first:border-t-0">
-                  <span style={{ color }} className="inline-flex shrink-0"><RoleGlyph role={a.role} /></span>
+                  <AgentImage agent={a.agent} className="w-7 h-7 rounded-sm shrink-0" />
                   <span className="text-[13px] font-semibold w-[90px] shrink-0 capitalize">{a.agent}</span>
                   <div className="flex-1"><ImpactBar pct={a.pick_rate * 100} color={color} /></div>
                   <span className="font-mono text-xs w-11 text-right shrink-0" style={{ color }}>

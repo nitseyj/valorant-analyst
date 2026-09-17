@@ -11,17 +11,13 @@ Run locally:
 Then open http://127.0.0.1:8000/docs for interactive API docs (auto-generated
 by FastAPI — nothing extra to write for that).
 
-NOTE: this file was written and its import wiring was verified against the
-real package layout, but the FastAPI/uvicorn endpoints themselves could not
-be executed in the sandbox this was built in (no internet access to install
-fastapi/uvicorn there). Test it for real the first time you run it locally —
-see the curl examples at the bottom of this docstring.
+Quick smoke test once it's running (see backend/README.md for the full
+endpoint reference):
 
     curl http://127.0.0.1:8000/health
     curl http://127.0.0.1:8000/matches?team=Paper+Rex
     curl http://127.0.0.1:8000/matches/542195
     curl http://127.0.0.1:8000/matches/542195/verdict
-    curl http://127.0.0.1:8000/games/233397/verdict
 """
 
 import os
@@ -42,11 +38,12 @@ from app.analyzers import meta_stats
 # --------------------------------------------------------------------
 # Database
 # --------------------------------------------------------------------
-# Defaults to backend/data/valorant_test_2025.db (relative to this file),
-# matching where load_match_analyzer.py writes it. Override with the
-# VALORANT_DB_PATH env var to point at a different database (e.g. once
-# more years are loaded into a combined valorant.db).
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "valorant_test_2025.db"
+# Defaults to backend/data/valorant.db (relative to this file) — the
+# combined multi-year database (2021-2026), built by running
+# scripts/load_match_analyzer.py once per year against the same --out file.
+# Override with the VALORANT_DB_PATH env var to point at a different
+# database (e.g. the older single-season backend/data/valorant_test_2025.db).
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "valorant.db"
 DB_PATH = Path(os.environ.get("VALORANT_DB_PATH", DEFAULT_DB_PATH))
 
 
@@ -104,10 +101,11 @@ def health():
 def list_matches(
     team: Optional[str] = Query(None, description="Filter by team name (partial match)"),
     tournament: Optional[str] = Query(None, description="Filter by tournament name (partial match)"),
+    year: Optional[int] = Query(None, description="Filter by season year (2021-2026)"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    """List matches. Supports optional team/tournament filters and pagination."""
+    """List matches. Supports optional team/tournament/year filters and pagination."""
     conn = get_connection()
     try:
         clauses = []
@@ -118,10 +116,23 @@ def list_matches(
         if tournament:
             clauses.append("t.name LIKE ?")
             params.append(f"%{tournament}%")
+        if year is not None:
+            clauses.append("t.year = ?")
+            params.append(year)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
+        count_query = f"""
+            SELECT COUNT(*)
+            FROM matches m
+            JOIN tournaments t ON m.tournament_id = t.tournament_id
+            JOIN teams ta ON m.team_a_id = ta.team_id
+            JOIN teams tb ON m.team_b_id = tb.team_id
+            {where}
+        """
+        total = conn.execute(count_query, params).fetchone()[0]
+
         query = f"""
-            SELECT m.match_id, m.match_name, t.name AS tournament, s.name AS stage, m.match_type,
+            SELECT m.match_id, m.match_name, t.name AS tournament, t.year, s.name AS stage, m.match_type,
                    ta.name AS team_a, tb.name AS team_b, m.team_a_score, m.team_b_score, tw.name AS winner
             FROM matches m
             JOIN tournaments t ON m.tournament_id = t.tournament_id
@@ -133,9 +144,8 @@ def list_matches(
             ORDER BY m.match_id DESC
             LIMIT ? OFFSET ?
         """
-        params.extend([limit, offset])
-        rows = conn.execute(query, params).fetchall()
-        return {"count": len(rows), "matches": [dict(r) for r in rows]}
+        rows = conn.execute(query, params + [limit, offset]).fetchall()
+        return {"count": len(rows), "total": total, "matches": [dict(r) for r in rows]}
     finally:
         conn.close()
 
@@ -223,11 +233,12 @@ def get_game_verdict(game_id: int):
 
 
 @app.get("/teams")
-def get_teams():
-    """List every team that has at least one loaded match — for a team picker."""
+def get_teams(q: Optional[str] = Query(None, description="Filter by team name (partial match)")):
+    """Every team with at least one loaded match, strongest (by all-time
+    win rate) first. Optional `q` filters by name substring."""
     conn = get_connection()
     try:
-        return {"teams": team_profile.list_teams(conn)}
+        return {"teams": team_profile.list_teams(conn, q=q)}
     finally:
         conn.close()
 
@@ -304,12 +315,34 @@ def search_players(q: str):
         conn.close()
 
 
-@app.get("/stats/meta")
-def get_meta_stats():
-    """Season-wide agent meta: pick rates and role distribution, for the
-    Analytics page."""
+@app.get("/players/leaderboard")
+def get_players_leaderboard(
+    metric: str = Query("acs", description="rating | acs | adr | kast | hs"),
+    limit: int = Query(20, ge=1, le=100),
+    min_maps: int = Query(10, ge=1, description="Minimum maps played to qualify — keeps a 1-map hot streak off the board"),
+):
+    """Full ranked players leaderboard for the Players page — any of
+    rating/ACS/ADR/KAST%/HS%, up to `limit` players (unlike the home
+    dashboard's fixed ACS-only top-5 mini-widget at /stats/overview)."""
     conn = get_connection()
     try:
-        return meta_stats.build_meta(conn)
+        try:
+            return {"metric": metric, "players": overview_stats.players_leaderboard(conn, metric=metric, min_maps=min_maps, limit=limit)}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/stats/meta")
+def get_meta_stats(
+    year: Optional[int] = Query(None, description="Filter by season year (2021-2026)"),
+    map_name: Optional[str] = Query(None, alias="map", description="Filter by map name, e.g. Bind"),
+):
+    """Season-wide agent meta: pick rates and role distribution, for the
+    Analytics page. Optionally filtered by year and/or map."""
+    conn = get_connection()
+    try:
+        return meta_stats.build_meta(conn, year=year, map_name=map_name)
     finally:
         conn.close()

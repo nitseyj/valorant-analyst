@@ -1,9 +1,9 @@
-# Data quality findings — vct_2025 test load
+# Data quality findings
 
 Found by actually running the ETL against real data, not by inspection alone.
 Each of these is now handled explicitly in `load_match_analyzer.py` — logged
-and skipped, never guessed. Keep this file updated as later years get loaded;
-some of these may not reproduce identically (e.g. tournament naming aliases).
+and skipped, never guessed. Findings #1-7 came from the original vct_2025-only
+test load; #8-11 came from loading the full 2021-2026 combined database.
 
 ## 1. Tournament names differ across files within the same year
 `eco_rounds.csv` uses "Champions Tour 2025: EMEA Stage 1"; every other file
@@ -72,14 +72,66 @@ step. Lesson: a table with 0 rows and no error is a silent failure mode —
 worth a basic non-zero-rowcount assertion per table once the ETL is
 considered "done," not just "runs without errors."
 
-## vct_2025 test load result summary
+## 8. `player_game_agents` was never loaded (same class of bug as #7)
+The schema table exists and `roster_builder.py` queries it for a player's
+`primary_agent`/`primary_role` from day one — but the loader never inserted
+into it, even though `overview.csv`'s `Agents` column (e.g. `"yoru"`, or
+`"sova, yoru"` on an agent swap mid-map) was sitting right there unused in
+the same loop that already reads that row for `player_game_stats`. Same
+silent-failure shape as #7: 0 rows, no error, nothing caught it until
+someone actually looked at what the Roster Builder was returning (every
+player's agent chip showing "?"). Fixed by parsing `Agents` (comma-split,
+gated on `side='both'` so it's not attempted 3x per player-map) in the same
+loop. Loading all 6 years recovered 271,105 previously-never-loaded rows.
+
+## 9. One row in vct_2021's id-lookup file has a null Game ID
+`ids/tournaments_stages_matches_games_ids.csv` for vct_2021 has exactly 1
+row (of 14,489) with a missing `Game ID` — crashes `int(nan)` if not
+guarded. Isolated to that single row in that single year across all 6
+seasons (checked). Skipped and logged (`id_map_incomplete_row`), not
+guessed — same treatment as every other malformed row here.
+
+## 10. Transient CSV read failures on the larger files
+vct_2022's `agents/teams_picked_agents.csv` (~13MB, 131,546 rows) threw
+`pandas.errors.ParserError: Calling read(nbytes) on source failed` once
+during a full 6-year run — and read back cleanly on an immediate manual
+retry with the exact same code path, which rules out a malformed file. This
+reads as an OS-level I/O hiccup (Windows antivirus/indexer file contention
+is the usual suspect on a file that size), not a data-quality issue, but a
+crash 5 years into a 6-year load is expensive to lose to a flake. The loader
+now retries every `read_csv` up to 3x with a short backoff
+(`read_csv_retry()`) before giving up — a load that's actually failing for a
+real reason (corrupt file) still fails the same way after retrying; a
+transient one doesn't take the whole run down with it.
+
+## 11. Mangled (double-UTF-8-encoded) characters in a small number of names
+At least one team name in vct_2021 (`ids/teams_ids.csv`: "SEMORGANIZAÇÃO")
+is stored double-UTF-8-encoded in the raw source file itself — confirmed by
+inspecting the raw bytes, not a pandas/sqlite read issue on this project's
+side. Scope-checked: exactly 1 occurrence of the tell-tale mangled-byte
+pattern across every year's `teams_ids.csv`/`players_ids.csv`, so this is a
+narrow, cosmetic upstream issue (the name displays wrong, nothing crashes or
+joins incorrectly) rather than a systemic one. Not fixed — guessing the
+"correct" original bytes would be exactly the kind of fabrication this
+project's own rules say not to do. Flagging here in case a name looks
+visibly garbled somewhere in the UI; it's the source data, not a bug.
+
+## Full 2021-2026 combined load result summary
 |---|---|---|
-| teams | 4,024 | global reference set, all years |
-| players | 15,240 | global reference set, all years |
-| matches | 478 | 25 skipped (Mega Minors placeholder) |
-| games | 1,277 | 0 skipped |
-| rounds | 26,244 | 731 skipped (placeholder-team matches) |
-| round_team_economy | 24,724 | 458 skipped (placeholder-team matches) |
-| player_game_stats | 37,290 | 14,946 "All Maps" aggregate rows correctly excluded; 0 ambiguous (fixed — see #3) |
-| player_game_impact | 9,660 | fixed — see #7; 3,922 "All Maps" aggregate rows correctly excluded |
-| team_game_agent_picks | 11,810 | 5,806 tournament-aggregate rows correctly excluded; 450 genuinely ambiguous |
+| tournaments | 249 | |
+| stages | 582 | |
+| teams (global reference set) | 4,019 | 4,017 appear in >=1 loaded match |
+| players (global reference set) | 15,224 | 15,215 have loaded stats |
+| agents | 29 | |
+| matches | 12,621 | 2021: 7,220 · 2022: 3,841 · 2023: 331 · 2024: 434 · 2025: 478 · 2026: 296 (partial season) |
+| games | 27,417 | |
+| rounds | 554,703 | |
+| round_team_economy | 841,657 | |
+| player_game_stats | 813,130 | |
+| player_game_impact | 209,385 | |
+| player_game_agents | 271,105 | 0 before fix #8 |
+| team_game_agent_picks | 37,685 | |
+
+Database file: ~180MB (gitignored — see the root README for the rebuild
+command; GitHub hard-blocks pushes over 100MB, so this can't be committed
+the way the old single-season `valorant_test_2025.db` was).

@@ -4,9 +4,19 @@ load_match_analyzer.py — loads one VCT year's matches/ + agents/
 CSVs into a SQLite database matching match_analyzer_schema.sql.
 
 Usage:
-    python load_match_analyzer.py <raw_data_root> <year_folder_name> --out valorant.db
+    python load_match_analyzer.py <raw_data_root> <year_folder_name> --out valorant.db --schema <schema.sql>
 
-    e.g. python load_match_analyzer.py backend/data/raw vct_2025 --out backend/data/valorant.db
+    e.g. python load_match_analyzer.py backend/data/raw vct_2025 --out backend/data/valorant.db --schema backend/app/database/match_analyzer_schema.sql
+
+Run once per year, pointing --out at the SAME file each time, to build one
+combined multi-year database — it accumulates rather than overwrites (see
+the --fresh flag if you actually want a from-scratch single-year rebuild):
+
+    for year in vct_2021 vct_2022 vct_2023 vct_2024 vct_2025 vct_2026; do
+        python load_match_analyzer.py backend/data/raw "$year" \
+            --out backend/data/valorant.db \
+            --schema backend/app/database/match_analyzer_schema.sql
+    done
 
 <raw_data_root> must contain:
     all_ids/all_teams_ids.csv, all_teams_mapping.csv, all_players_ids.csv
@@ -39,6 +49,7 @@ Design decisions worth knowing before you change this file:
 import argparse
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from collections import defaultdict
 
@@ -53,6 +64,27 @@ def pct_to_float(s):
 
 def log(msg):
     print(f"  {msg}")
+
+
+def read_csv_retry(path, attempts=3, delay=2.0, **kwargs):
+    """pd.read_csv with a few retries on transient I/O failures. Observed in
+    practice on Windows against the larger files here (e.g. vct_2022's
+    ~13MB teams_picked_agents.csv): a "Calling read(nbytes) on source
+    failed" ParserError that does NOT reproduce when the exact same read is
+    retried a moment later — a transient OS-level read hiccup (antivirus/
+    indexer contention is the usual suspect), not a malformed file. Retrying
+    beats crashing an entire year's load over it; if it's a genuinely
+    corrupt file, all attempts fail the same way and this re-raises."""
+    last_err = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return pd.read_csv(path, **kwargs)
+        except (pd.errors.ParserError, OSError) as e:
+            last_err = e
+            if attempt < attempts:
+                log(f"read_csv({path}) failed on attempt {attempt}/{attempts} ({e}); retrying...")
+                time.sleep(delay)
+    raise last_err
 
 
 def build_year_lookup(df, name_col, id_col):
@@ -103,6 +135,12 @@ def main():
     ap.add_argument("year_folder", type=str)
     ap.add_argument("--out", type=str, default="valorant.db")
     ap.add_argument("--schema", type=str, default="schema.sql")
+    ap.add_argument(
+        "--fresh", action="store_true",
+        help="Delete and recreate --out from scratch before loading, instead of accumulating "
+             "into an existing database. Use this for a single-year rebuild; omit it when "
+             "loading multiple years into one combined database one at a time.",
+    )
     args = ap.parse_args()
 
     root = Path(args.raw_root)
@@ -115,11 +153,20 @@ def main():
             sys.exit(1)
 
     out_path = Path(args.out)
-    if out_path.exists():
+    if args.fresh and out_path.exists():
         out_path.unlink()
 
+    # Only apply the schema when the database is actually new — re-running
+    # executescript's CREATE TABLE statements against an existing db (the
+    # normal case when loading a second, third, ... year into the same file)
+    # would fail with "table already exists". Matches/games/players/teams all
+    # carry real IDs from the source's own global all_ids/*.csv files, so
+    # accumulating years via INSERT OR IGNORE (see below) is safe — nothing
+    # gets double-counted or overwritten across runs.
+    is_new_db = not out_path.exists()
     conn = sqlite3.connect(out_path)
-    conn.executescript(schema_path.read_text())
+    if is_new_db:
+        conn.executescript(schema_path.read_text())
     cur = conn.cursor()
 
     stats = defaultdict(int)
@@ -134,8 +181,8 @@ def main():
     # The per-year ids/teams_ids.csv IS safe to key by name (0 duplicate names
     # within a single year), so that's used for resolving THIS year's rows.
     # The global file is still used to populate the full teams reference table.
-    teams_ids_global = pd.read_csv(root / "all_ids/all_teams_ids.csv")
-    teams_map = pd.read_csv(root / "all_ids/all_teams_mapping.csv")
+    teams_ids_global = read_csv_retry(root / "all_ids/all_teams_ids.csv")
+    teams_map = read_csv_retry(root / "all_ids/all_teams_mapping.csv")
     abbr_by_name = dict(zip(teams_map["Full Name"], teams_map["Abbreviated"]))
     for _, row in teams_ids_global.dropna(subset=["Team ID"]).iterrows():
         tid = int(row["Team ID"])
@@ -150,7 +197,7 @@ def main():
     conn.commit()
     log(f"{stats['teams']} teams loaded (global reference set)")
 
-    teams_ids_year = pd.read_csv(yr / "ids/teams_ids.csv")
+    teams_ids_year = read_csv_retry(yr / "ids/teams_ids.csv")
     team_id_by_name, ambiguous_team_names = build_year_lookup(teams_ids_year, "Team", "Team ID")
     log(f"{len(team_id_by_name)} team names resolvable unambiguously for {args.year_folder} "
         f"({ambiguous_team_names} ambiguous name(s) excluded, if any — those rows will be skipped "
@@ -165,18 +212,16 @@ def main():
     # vct_2025/matches/overview.csv resolve against it with no gaps), so
     # THAT is what per-match stat rows are resolved against. The global
     # file is still used to populate the full players reference table.
-    players_ids_global = pd.read_csv(root / "all_ids/all_players_ids.csv")
-    name_to_ids = defaultdict(list)
+    players_ids_global = read_csv_retry(root / "all_ids/all_players_ids.csv")
     for _, row in players_ids_global.dropna(subset=["Player ID"]).iterrows():
         pid = int(row["Player ID"])
         name = row["Player"]
-        name_to_ids[name].append(pid)
         cur.execute("INSERT OR IGNORE INTO players (player_id, name) VALUES (?,?)", (pid, name))
         stats["players"] += 1
     conn.commit()
     log(f"{stats['players']} players loaded (global reference set)")
 
-    players_ids_year = pd.read_csv(yr / "ids/players_ids.csv")
+    players_ids_year = read_csv_retry(yr / "ids/players_ids.csv")
     player_id_by_name, ambiguous_player_names = build_year_lookup(players_ids_year, "Player", "Player ID")
     log(f"{len(player_id_by_name)} player names resolvable unambiguously for {args.year_folder} "
         f"({ambiguous_player_names} ambiguous name(s) excluded, if any — those rows will be skipped "
@@ -184,7 +229,7 @@ def main():
 
     # -----------------------------------------------------------------
     print("Loading tournaments/stages...")
-    match_types = pd.read_csv(yr / "ids/tournaments_stages_match_types_ids.csv")
+    match_types = read_csv_retry(yr / "ids/tournaments_stages_match_types_ids.csv")
     seen_tournaments, seen_stages = set(), set()
     year_num = int(args.year_folder.split("_")[-1])
     for _, row in match_types.dropna(subset=["Tournament ID", "Stage ID"]).iterrows():
@@ -207,7 +252,7 @@ def main():
 
     # -----------------------------------------------------------------
     print("Building match/game ID lookup...")
-    id_map = pd.read_csv(yr / "ids/tournaments_stages_matches_games_ids.csv")
+    id_map = read_csv_retry(yr / "ids/tournaments_stages_matches_games_ids.csv")
 
     def match_key(row):
         return (normalize_tournament(row["Tournament"]), row["Stage"], row["Match Type"], row["Match Name"])
@@ -217,16 +262,24 @@ def main():
 
     match_lookup = {}   # match_key -> (match_id, tournament_id, stage_id)
     game_lookup = {}    # game_key -> game_id
+    id_cols = ["Match ID", "Tournament ID", "Stage ID", "Game ID"]
     for _, row in id_map.iterrows():
+        # A handful of rows in this lookup file (observed: 1 row in vct_2021)
+        # have a missing ID column — a genuine upstream scraping gap, not
+        # something to guess at. Skip just that row rather than crashing the
+        # whole year's load on int(nan).
+        if row[id_cols].isna().any():
+            skipped["id_map_incomplete_row"] += 1
+            continue
         mk = match_key(row)
         match_lookup[mk] = (int(row["Match ID"]), int(row["Tournament ID"]), int(row["Stage ID"]))
         game_lookup[game_key(row)] = int(row["Game ID"])
-    log(f"{len(match_lookup)} matches, {len(game_lookup)} games indexed")
+    log(f"{len(match_lookup)} matches, {len(game_lookup)} games indexed "
+        f"({skipped['id_map_incomplete_row']} id-lookup row(s) skipped for a missing ID column)")
 
     # -----------------------------------------------------------------
     print("Loading matches...")
-    scores = pd.read_csv(yr / "matches/scores.csv")
-    inserted_matches = set()
+    scores = read_csv_retry(yr / "matches/scores.csv")
     for _, row in scores.iterrows():
         mk = (normalize_tournament(row["Tournament"]), row["Stage"], row["Match Type"], row["Match Name"])
         if mk not in match_lookup:
@@ -252,7 +305,6 @@ def main():
              team_a_id, team_b_id, int(row["Team A Score"]), int(row["Team B Score"]),
              winner_id, source_key),
         )
-        inserted_matches.add(match_id)
         stats["matches"] += 1
     conn.commit()
     log(f"{stats['matches']} matches loaded, {skipped['matches_no_id']} skipped (no ID match), "
@@ -260,8 +312,7 @@ def main():
 
     # -----------------------------------------------------------------
     print("Loading games (maps)...")
-    maps_scores = pd.read_csv(yr / "matches/maps_scores.csv")
-    game_source_key = {}  # game_key -> source_key string, for later tables
+    maps_scores = read_csv_retry(yr / "matches/maps_scores.csv")
     for _, row in maps_scores.iterrows():
         gk = (normalize_tournament(row["Tournament"]), row["Stage"], row["Match Type"], row["Match Name"], row["Map"])
         if gk not in game_lookup:
@@ -274,7 +325,6 @@ def main():
             continue
         match_id = match_lookup[mk][0]
         source_key = "|".join(str(x) for x in gk)
-        game_source_key[gk] = source_key
         cur.execute(
             """INSERT OR IGNORE INTO games
                (game_id, match_id, map_name, duration,
@@ -296,7 +346,7 @@ def main():
 
     # -----------------------------------------------------------------
     print("Loading rounds (win/loss methods)...")
-    wlm = pd.read_csv(yr / "matches/win_loss_methods_round_number.csv")
+    wlm = read_csv_retry(yr / "matches/win_loss_methods_round_number.csv")
     wlm_win = wlm[wlm["Outcome"] == "Win"]
     for _, row in wlm_win.iterrows():
         gk = (normalize_tournament(row["Tournament"]), row["Stage"], row["Match Type"], row["Match Name"], row["Map"])
@@ -319,7 +369,7 @@ def main():
 
     # -----------------------------------------------------------------
     print("Loading round economy...")
-    eco = pd.read_csv(yr / "matches/eco_rounds.csv")
+    eco = read_csv_retry(yr / "matches/eco_rounds.csv")
     for _, row in eco.iterrows():
         gk = (normalize_tournament(row["Tournament"]), row["Stage"], row["Match Type"], row["Match Name"], row["Map"])
         if gk not in game_lookup:
@@ -342,11 +392,23 @@ def main():
     log(f"{stats['round_economy']} round-economy rows loaded, "
         f"{skipped['econ_no_game']} skipped (no game ID), {skipped['econ_unknown_team']} skipped (unknown team)")
 
+    # agent_id_cache/get_agent_id are shared by player_game_agents (below) and
+    # team_game_agent_picks (further down) — defined once here so both use
+    # the same agents.name -> agent_id mapping instead of two independent ones.
+    agent_id_cache = {}
+
+    def get_agent_id(name):
+        if name in agent_id_cache:
+            return agent_id_cache[name]
+        cur.execute("INSERT OR IGNORE INTO agents (name) VALUES (?)", (name,))
+        cur.execute("SELECT agent_id FROM agents WHERE name = ?", (name,))
+        aid = cur.fetchone()[0]
+        agent_id_cache[name] = aid
+        return aid
+
     # -----------------------------------------------------------------
     print("Loading player game stats (overview.csv)...")
-    overview = pd.read_csv(yr / "matches/overview.csv")
-    # build (name, team) -> player_id using this year's rows against name_to_ids,
-    # only when unambiguous
+    overview = read_csv_retry(yr / "matches/overview.csv")
     for _, row in overview.iterrows():
         gk = (normalize_tournament(row["Tournament"]), row["Stage"], row["Match Type"], row["Match Name"], row["Map"])
         if gk not in game_lookup:
@@ -357,11 +419,10 @@ def main():
         if team_id is None:
             skipped["pstats_unknown_team"] += 1
             continue
-        candidates = player_id_by_name.get(row["Player"])
-        if candidates is None:
+        player_id = player_id_by_name.get(row["Player"])
+        if player_id is None:
             skipped["pstats_unknown_player"] += 1
             continue
-        player_id = candidates
         cur.execute(
             """INSERT OR IGNORE INTO player_game_stats
                (game_id, player_id, team_id, side, rating, acs, kills, deaths, assists,
@@ -374,14 +435,33 @@ def main():
              row.get("Kills - Deaths (FKD)")),
         )
         stats["player_game_stats"] += 1
+
+        # overview.csv's "Agents" column ("yoru" or, on an agent swap
+        # mid-map, "sova, yoru") — this was queried by roster_builder.py
+        # from day one but never actually populated by this loader, so
+        # every player's primary_agent/primary_role came back empty. Only
+        # need it once per (game, player), not once per side='both'/
+        # 'attack'/'defend' row, so gate on side='both'.
+        if row["Side"] == "both" and isinstance(row.get("Agents"), str):
+            for agent_name in row["Agents"].split(","):
+                agent_name = agent_name.strip().lower()
+                if not agent_name:
+                    continue
+                agent_id = get_agent_id(agent_name)
+                cur.execute(
+                    "INSERT OR IGNORE INTO player_game_agents (game_id, player_id, agent_id) VALUES (?,?,?)",
+                    (game_id, player_id, agent_id),
+                )
+                stats["player_game_agents"] += 1
     conn.commit()
-    log(f"{stats['player_game_stats']} player_game_stats rows loaded")
+    log(f"{stats['player_game_stats']} player_game_stats rows loaded, "
+        f"{stats['player_game_agents']} player_game_agents rows loaded")
     log(f"  skipped: no_game={skipped['pstats_no_game']}, unknown_team={skipped['pstats_unknown_team']}, "
         f"unknown_player={skipped['pstats_unknown_player']} (includes any ambiguous names excluded above)")
 
     # -----------------------------------------------------------------
     print("Loading player game impact (kills_stats.csv)...")
-    kills_stats = pd.read_csv(yr / "matches/kills_stats.csv")
+    kills_stats = read_csv_retry(yr / "matches/kills_stats.csv")
     for _, row in kills_stats.iterrows():
         if row["Map"] == "All Maps":
             skipped["pimpact_aggregate_row"] += 1
@@ -421,17 +501,8 @@ def main():
 
     # -----------------------------------------------------------------
     print("Loading team agent picks...")
-    picks = pd.read_csv(yr / "agents/teams_picked_agents.csv")
-    agent_id_cache = {}
-
-    def get_agent_id(name):
-        if name in agent_id_cache:
-            return agent_id_cache[name]
-        cur.execute("INSERT OR IGNORE INTO agents (name) VALUES (?)", (name,))
-        cur.execute("SELECT agent_id FROM agents WHERE name = ?", (name,))
-        aid = cur.fetchone()[0]
-        agent_id_cache[name] = aid
-        return aid
+    picks = read_csv_retry(yr / "agents/teams_picked_agents.csv")
+    # agent_id_cache/get_agent_id defined earlier, shared with player_game_agents
 
     # (Tournament, Stage, Match Type, Map) alone is NOT unique — in
     # round-robin "Group Stage" weeks the same Match Type label (e.g.

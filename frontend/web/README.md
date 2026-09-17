@@ -38,22 +38,35 @@ src/
     demo/*.json    real demo payloads extracted from an actual loaded season
     roles.js       agent -> role map (mirrors backend/app/analyzers/agent_analysis.py)
     format.js      small formatting helpers (percentages, evidence values, ...)
-  components/      shared UI: icons, Panel/SectionHeader/ImpactBar primitives,
-                   TeamBadge (logo with initials fallback), PlayerPortrait
-                   (geometric silhouette — no real photos, see below),
-                   RoundTimeline, EconomyChart, EvidenceRow, PlayerStatRow
+  components/      shared UI: icons, Panel/SectionHeader/ImpactBar/Select
+                   primitives, TeamBadge (logo with initials fallback),
+                   PlayerPortrait (geometric silhouette — no real photos,
+                   see below), MapImage/AgentImage (original illustrated
+                   art with an abstract-glyph fallback), RoundTimeline,
+                   EconomyChart, EvidenceRow, PlayerStatRow
   pages/           one file per view (Home, Teams, TeamProfile, Matches,
                    MatchVerdict, Players, Analytics, LegacyBuilder)
+
+public/assets/
+  valorant/teams/  team logos (gitignored here — synced from
+                   frontend/prototype/assets at predev/prebuild time, see
+                   scripts/sync-team-logos.mjs; not every team has one)
+  agents/          one illustration per agent, <agent-name>.jpg
+  maps/            one illustration per map, <map-name>.jpg
 ```
 
 ## Design constraints carried over from the original prototype
 
 - **No real player photos or Riot-owned artwork.** `PlayerPortrait` is an
-  original geometric silhouette; map/role glyphs are original abstract
-  marks, not the real map callouts or agent art. Team logos are the one
-  exception — they load from `public/assets/valorant/teams/<slug>.<ext>` if
-  present (not included in the git repo — see the root `README.md`)
-  and fall back to a generated initials badge.
+  original geometric silhouette; the small inline `MapGlyph`/`RoleGlyph`
+  icons are original abstract marks. `MapImage`/`AgentImage` show real
+  illustration — original AI-generated art in an independent style, not
+  actual in-game callouts or character art — falling back to the abstract
+  glyph if a file is ever missing. Team logos are the one exception where
+  this project uses real (not original) images — they load from
+  `public/assets/valorant/teams/<slug>.<ext>` if present (not included in
+  the git repo — see the root `README.md`) and fall back to a generated
+  initials badge.
 - **Never fabricate a stat.** Every number on screen traces back to a real
   API field or bundled real demo payload. A couple of panels from an early
   visual reference (a "players by region" breakdown, video highlight clips)

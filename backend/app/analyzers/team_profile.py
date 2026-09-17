@@ -18,17 +18,39 @@ scraped at different times. Flagged in the output, not hidden.
 import sqlite3
 
 
-def list_teams(conn: sqlite3.Connection) -> list:
-    """Every team that has at least one loaded match — for a team picker.
-    Excludes teams with zero matches so the picker isn't full of dead
-    entries from the global teams reference table."""
+def list_teams(conn: sqlite3.Connection, q: str = None, min_matches_for_ranking: int = 10) -> list:
+    """Every team that has at least one loaded match — for the Teams
+    browse page. Excludes teams with zero matches so the list isn't full
+    of dead entries from the global teams reference table.
+
+    Includes each team's all-time record and win rate, sorted strongest
+    first. A plain win-rate-desc sort puts a team that went 7-0 in a
+    handful of regional matches above Sentinels — technically "highest
+    win rate," not what "strongest teams first" actually means. So teams
+    with at least `min_matches_for_ranking` matches are ranked by win rate
+    among themselves and shown first; everyone else (small sample, not
+    reliably comparable — same reasoning as this project's map-stats rule)
+    is still listed, just below that group, also sorted by win rate within
+    its own tier so nothing is hidden. `q` optionally filters by a
+    case-insensitive name substring."""
     cur = conn.execute(
-        """SELECT DISTINCT t.team_id, t.name
+        """SELECT t.team_id, t.name, COUNT(*) AS matches,
+             SUM(CASE WHEN m.winner_team_id = t.team_id THEN 1 ELSE 0 END) AS wins
            FROM teams t
-           WHERE t.team_id IN (SELECT team_a_id FROM matches UNION SELECT team_b_id FROM matches)
-           ORDER BY t.name"""
+           JOIN matches m ON (m.team_a_id = t.team_id OR m.team_b_id = t.team_id)
+           WHERE (? IS NULL OR t.name LIKE ? COLLATE NOCASE)
+           GROUP BY t.team_id
+           ORDER BY (matches >= ?) DESC, (wins * 1.0 / matches) DESC, wins DESC, t.name ASC""",
+        (q, f"%{q}%" if q else None, min_matches_for_ranking),
     )
-    return [{"team_id": r[0], "name": r[1]} for r in cur.fetchall()]
+    return [
+        {
+            "team_id": r[0], "name": r[1], "matches": r[2], "wins": r[3],
+            "win_rate": round(r[3] / r[2], 3) if r[2] else None,
+            "ranked": r[2] >= min_matches_for_ranking,
+        }
+        for r in cur.fetchall()
+    ]
 
 
 def _record(conn, team_id):

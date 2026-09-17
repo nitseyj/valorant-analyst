@@ -77,7 +77,7 @@ def build_report(root: Path) -> str:
     if not csv_paths:
         return f"# Dataset Inspection Report\n\nNo CSV files found under `{root}`.\n"
 
-    lines = [f"# Dataset Inspection Report\n", f"Root: `{root}`\n", f"Tables found: {len(csv_paths)}\n"]
+    lines = ["# Dataset Inspection Report\n", f"Root: `{root}`\n", f"Tables found: {len(csv_paths)}\n"]
 
     # index of column name -> list of tables it appears in, for the
     # cross-reference section at the end

@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { listMatches } from '../lib/api'
 import { impactColor, matchScoreStr } from '../lib/format'
 import { SearchIcon, VersusIcon, ChevronRightIcon, CategoryIcon } from '../components/icons'
-import { SectionHeader, EmptyState, LoadingState } from '../components/ui'
+import { SectionHeader, EmptyState, LoadingState, Select } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
+
+const YEARS = [2026, 2025, 2024, 2023, 2022, 2021]
 
 export default function Matches({ onOpenMatch }) {
   const [query, setQuery] = useState('')
+  const [year, setYear] = useState(null)
   const [matches, setMatches] = useState(null)
   const [status, setStatus] = useState('')
 
@@ -14,31 +17,40 @@ export default function Matches({ onOpenMatch }) {
     let cancelled = false
     setStatus('loading matches…')
     const t = setTimeout(async () => {
-      const { matches, live } = await listMatches({ team: query || undefined })
+      const { matches, total, live } = await listMatches({ team: query || undefined, year: year || undefined, limit: 50 })
       if (cancelled) return
       setMatches(matches)
-      setStatus(live ? `${matches.length} match${matches.length === 1 ? '' : 'es'} · live from your backend` : `backend not reachable — showing ${matches.length} demo match${matches.length === 1 ? '' : 'es'}`)
+      const shown = matches.length
+      const totalLabel = total != null && total !== shown ? ` of ${total}` : ''
+      setStatus(
+        live
+          ? `${shown}${totalLabel} match${(total ?? shown) === 1 ? '' : 'es'} · live from your backend`
+          : `backend not reachable — showing ${shown} demo match${shown === 1 ? '' : 'es'}`
+      )
     }, 250)
     return () => {
       cancelled = true
       clearTimeout(t)
     }
-  }, [query])
+  }, [query, year])
 
   return (
     <div className="fade-up">
       <SectionHeader className="text-xl">All matches</SectionHeader>
-      <div className="relative mb-1.5">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none">
-          <SearchIcon size={15} />
-        </span>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          type="text"
-          placeholder="Search by team name..."
-          className="w-full bg-panel border border-line text-ink text-sm rounded-sm py-2.5 pl-9 pr-3 font-mono focus:outline-none focus:border-brand/60"
-        />
+      <div className="flex flex-wrap gap-2 mb-1.5">
+        <div className="relative flex-1 min-w-[200px]">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none">
+            <SearchIcon size={15} />
+          </span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            type="text"
+            placeholder="Search by team name..."
+            className="w-full bg-panel border border-line text-ink text-sm rounded-sm py-2.5 pl-9 pr-3 font-mono focus:outline-none focus:border-brand/60"
+          />
+        </div>
+        <Select value={year} onChange={setYear} placeholder="All years" options={YEARS.map((y) => ({ value: y, label: String(y) }))} />
       </div>
       <div className="font-mono text-[11px] text-ink-faint mb-4">{status}</div>
 
@@ -68,7 +80,7 @@ export default function Matches({ onOpenMatch }) {
                           {pf.category} — <span style={{ color }}>{pf.impact_label.toLowerCase()}</span>
                         </>
                       ) : (
-                        m.tournament || ''
+                        `${m.tournament || ''}${m.year ? ` · ${m.year}` : ''}`
                       )}
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getMatchVerdict, getTimeline } from '../lib/api'
 import { extractMvp, impactColor } from '../lib/format'
-import { CategoryIcon, MapGlyph, TrophyIcon } from '../components/icons'
+import { CategoryIcon, MapGlyph, TrophyIcon, DividerDeco } from '../components/icons'
 import { Panel, SectionHeader, ImpactBar, ExpandableRow, Pips, LoadingState, EmptyState } from '../components/ui'
 import EvidenceRow from '../components/EvidenceRow'
 import PlayerStatRow from '../components/PlayerStatRow'
@@ -150,7 +150,7 @@ export default function MatchVerdict({ matchId }) {
         </div>
       </Panel>
 
-      <div className="my-4"><svg viewBox="0 0 120 12" preserveAspectRatio="none" className="w-full h-3" fill="none"><path d="M0 6h120" stroke="var(--color-line)" strokeWidth="1" /><path d="M50 6h20" stroke="var(--color-brand)" strokeWidth="3" /></svg></div>
+      <div className="my-4"><DividerDeco /></div>
 
       <SectionHeader>Ranked factors</SectionHeader>
       {m.ranked_factors.map((f) => (

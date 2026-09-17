@@ -213,7 +213,7 @@ def analyze_match(conn: sqlite3.Connection, match_id: int) -> dict:
         all_players.extend(_player_rows(conn, gid))
     series_players = _aggregate_across_maps(all_players)
 
-    return _build_result(f"the series", team_a_id, team_a_name, team_b_id, team_b_name, series_players)
+    return _build_result("the series", team_a_id, team_a_name, team_b_id, team_b_name, series_players)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,12 @@
 backend/data/raw/
 backend/data/processed/
 
+# Combined multi-year database (~180MB+, all 6 loaded seasons) — GitHub
+# hard-blocks any push containing a file over 100MB, so this can't be
+# committed the way the old single-season valorant_test_2025.db was.
+# Rebuild it locally: see "Rebuilding the database" in the root README.
+backend/data/valorant.db
+
 # Python
 __pycache__/
 *.pyc

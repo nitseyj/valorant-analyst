@@ -113,7 +113,6 @@ def _build_result(map_label, team_a_id, team_a_name, team_b_id, team_b_name, gam
     top = a_top if (a_top and (not b_top or a_top[1] >= b_top[1])) else b_top
     if top and top[0]:
         top_team = team_a_name if top == a_top else team_b_name
-        size_label = None
         # figure out their biggest single clutch for a natural sentence
         biggest = None
         for size in ["1v5", "1v4", "1v3", "1v2", "1v1"]:

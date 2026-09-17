@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { getOverview, listMatches, getMatchVerdict } from '../lib/api'
 import { extractMvp, impactColor, matchScoreStr } from '../lib/format'
-import { PlayersIcon, TeamsIcon, MatchesIcon, FlameIcon, VersusIcon, MapGlyph } from '../components/icons'
+import { PlayersIcon, TeamsIcon, MatchesIcon, FlameIcon, VersusIcon } from '../components/icons'
 import { Panel, SectionHeader, StatCard, EmptyState } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
 import PlayerPortrait from '../components/PlayerPortrait'
+import MapImage from '../components/MapImage'
 
 export default function Home({ onOpenMatch, onOpenTeam }) {
   const [stats, setStats] = useState(null)
@@ -65,7 +66,7 @@ export default function Home({ onOpenMatch, onOpenTeam }) {
           <line x1="240" y1="0" x2="240" y2="480" stroke="var(--color-brand)" strokeWidth="1" />
           <line x1="0" y1="240" x2="480" y2="240" stroke="var(--color-brand)" strokeWidth="1" />
         </svg>
-        <div className="relative font-mono text-[11px] tracking-[0.2em] text-brand mb-3">VCT 2025 · SEASON LOADED</div>
+        <div className="relative font-mono text-[11px] tracking-[0.2em] text-brand mb-3">VCT 2021–2026 · ALL SEASONS LOADED</div>
         <h1 className="relative font-display text-3xl md:text-4xl font-bold leading-tight mb-2 max-w-xl">
           Every verdict, <span className="text-brand">backed by evidence.</span>
         </h1>
@@ -201,12 +202,12 @@ export default function Home({ onOpenMatch, onOpenTeam }) {
           <SectionHeader>Map pick counts</SectionHeader>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
             {stats.map_stats.slice(0, 6).map((m) => (
-              <div key={m.map} className="cut-corner-sm bg-panel border border-line p-3 text-center">
-                <div className="flex justify-center text-ink-dim mb-2">
-                  <MapGlyph map={m.map} size={22} />
+              <div key={m.map} className="cut-corner-sm bg-panel border border-line overflow-hidden text-center">
+                <MapImage map={m.map} className="w-full h-20" />
+                <div className="p-2.5">
+                  <div className="text-xs font-semibold">{m.map}</div>
+                  <div className="font-mono text-[11px] text-ink-faint mt-0.5">{m.played} played</div>
                 </div>
-                <div className="text-xs font-semibold">{m.map}</div>
-                <div className="font-mono text-[11px] text-ink-faint mt-0.5">{m.played} played</div>
               </div>
             ))}
           </div>

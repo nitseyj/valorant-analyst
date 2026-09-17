@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { getTeamProfile } from '../lib/api'
 import { roleOf } from '../lib/roles'
-import { VersusIcon, MapGlyph } from '../components/icons'
+import { VersusIcon } from '../components/icons'
 import { Panel, SectionHeader, ImpactBar, RoleChip, LoadingState, EmptyState } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
 import PlayerStatRow from '../components/PlayerStatRow'
 import WinRateRing from '../components/WinRateRing'
+import MapImage from '../components/MapImage'
 
 export default function TeamProfile({ teamId, onOpenMatch }) {
   const [p, setP] = useState(null)
@@ -43,7 +44,7 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
         <div className="font-mono text-[11px] text-ink-faint mb-3.5">MAP POOL</div>
         {p.map_stats.map((m) => (
           <div key={m.map} className="flex items-center gap-2.5 mb-2.5">
-            <span className="w-3.5 inline-flex text-ink-faint shrink-0"><MapGlyph map={m.map} /></span>
+            <MapImage map={m.map} className="w-9 h-9 rounded-sm shrink-0" />
             <span className="text-xs w-[72px] shrink-0">{m.map}</span>
             <div className="flex-1"><ImpactBar pct={(m.map_win_rate || 0) * 100} color={(m.map_win_rate || 0) >= 0.5 ? 'var(--color-brand)' : 'var(--color-team-b)'} /></div>
             <span className="font-mono text-[11px] text-ink-dim w-20 text-right shrink-0">

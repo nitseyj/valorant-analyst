@@ -18,10 +18,14 @@ Hard rules from the plan, followed literally here:
     is stated explicitly as an unmeasured factor in the response, not
     silently omitted or guessed at.
 
-Currently scoped to whatever single season is loaded (2025) — the
-plan's "different eras" framing needs multiple years loaded to mean
-anything real; with one season loaded this is closer to the plan's
-"Lineup Comparison" (section 4) than the full cross-era version.
+A player's rating/ACS is averaged across every match they have loaded
+data for, with no year filter — so with multiple seasons loaded (see
+DEFAULT_DB_PATH in main.py), this is a career-wide average across
+whatever years are in the database, not one season's form. That's
+disclosed explicitly in simulate()'s caveats, not hidden — but it does
+mean the plan's "different eras" framing (section 4/5) isn't actually
+implemented here: there's no way to ask for "this player's 2022 form
+vs their 2025 form" specifically, only their all-time average.
 """
 
 import sqlite3
@@ -167,9 +171,11 @@ def simulate(conn: sqlite3.Connection, names_a: list, names_b: list) -> dict:
         "synergy, comms, or in-game-leadership data for a combination "
         "that doesn't exist in the loaded matches. Not modeled; not "
         "guessed at.",
-        "Based on individual season-average rating only, from whatever "
-        "single season is currently loaded — not adjusted for opponent "
-        "strength, map pool, or recent form trend.",
+        "Based on individual rating averaged across every match this "
+        "player has loaded data for — if multiple seasons are loaded, "
+        "that's a career-wide average blending every year together, not "
+        "current form. Not adjusted for opponent strength, map pool, "
+        "meta shifts between patches/years, or recent form trend.",
         "Role coverage is a small secondary factor, not a dominant one.",
     ]
     low_sample_players = [p["name"] for p in lineup_a["players"] + lineup_b["players"] if p["low_sample"]]

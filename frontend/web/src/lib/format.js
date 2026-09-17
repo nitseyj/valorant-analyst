@@ -1,8 +1,3 @@
-export function pctBar(val) {
-  if (val === null || val === undefined) return null
-  return Math.max(0, Math.min(100, val * 100))
-}
-
 export function formatEvidenceValue(metric, val) {
   if (val === null || val === undefined) return '—'
   if (typeof val === 'string') return val

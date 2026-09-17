@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CategoryIcon, RoleGlyph } from './icons'
+import { RoleGlyph } from './icons'
 import { ROLE_COLOR } from '../lib/roles'
 
 export function ExpandableRow({ header, children, indent = 'pl-11' }) {
@@ -80,14 +80,6 @@ export function RoleChip({ role, label }) {
   )
 }
 
-export function CategoryBadge({ category, color }) {
-  return (
-    <span className="inline-flex" style={{ color }}>
-      <CategoryIcon category={category} />
-    </span>
-  )
-}
-
 export function Pips({ scoreStr }) {
   const [a, b] = scoreStr.split('-').map(Number)
   const pips = []
@@ -103,6 +95,21 @@ export function Pips({ scoreStr }) {
         />
       ))}
     </div>
+  )
+}
+
+export function Select({ value, onChange, options, placeholder, className = '' }) {
+  return (
+    <select
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value || null)}
+      className={`bg-panel border border-line text-ink text-xs font-mono rounded-sm py-2 px-2.5 focus:outline-none focus:border-brand/60 ${className}`}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
   )
 }
 

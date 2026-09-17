@@ -169,8 +169,15 @@ export default function LegacyBuilder() {
       setStatus('live projection')
       setResult(data)
     } catch (e) {
+      // Network failure (server not running) throws a TypeError; a timed-out
+      // AbortSignal throws a DOMException named 'TimeoutError'/'AbortError'
+      // with an unhelpful technical message — both mean "couldn't reach a
+      // live backend," not "the backend rejected this request" (that case
+      // is a real Error with a meaningful .message, thrown in api.js from
+      // the response body's `detail`, e.g. "player(s) not found...").
+      const unreachable = e instanceof TypeError || e.name === 'TimeoutError' || e.name === 'AbortError'
       setStatus(
-        e.message === 'Failed to fetch' || e instanceof TypeError
+        unreachable
           ? 'Backend not reachable — the roster builder needs a live connection (player combinations are too numerous to bundle as demo data). Start the API and try again.'
           : `Backend error: ${e.message}`
       )
@@ -184,7 +191,7 @@ export default function LegacyBuilder() {
         <CrosshairDeco className="text-team-b opacity-45" />
       </div>
       <p className="text-[13px] text-ink-dim mb-5 max-w-2xl">
-        Build two hypothetical 5-player lineups from any players in the loaded season and see a model
+        Build two hypothetical 5-player lineups from any players in the loaded data and see a model
         projection of the matchup. This is not a prediction of a real result — see the caveats below every
         projection for exactly what is and isn't accounted for.
       </p>

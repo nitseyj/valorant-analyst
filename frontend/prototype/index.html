@@ -458,7 +458,7 @@
 
   <div id="view-players" style="display:none;">
     <div class="section-eyebrow" style="font-size:22px;">Top players</div>
-    <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px;">Ranked by average ACS across the loaded season (minimum 10 maps played).</p>
+    <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px;">Ranked by average ACS across all loaded seasons (minimum 10 maps played).</p>
     <div class="cut-panel" style="padding:20px 24px;" id="playersLeaderboard"></div>
   </div>
 
@@ -467,7 +467,7 @@
       <img class="deco-illus" src="assets/ui/illustrations/agent_reyna.jpg" alt="" aria-hidden="true" loading="lazy" onerror="this.remove()">
       <div class="section-eyebrow" style="font-size:22px;">Legacy Roster Builder <svg class="deco-crosshair" width="26" height="26" viewBox="0 0 40 40" fill="none" stroke="currentColor"><circle cx="20" cy="20" r="12"/><path d="M20 0v10M20 30v10M0 20h10M30 20h10"/></svg></div>
       <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px; max-width:64ch;">
-        Build two hypothetical 5-player lineups from any players in the loaded season and see a model
+        Build two hypothetical 5-player lineups from any players in the loaded data and see a model
         projection of the matchup. This is not a prediction of a real result — see the caveats below
         every projection for exactly what is and isn't accounted for.
       </p>
@@ -492,8 +492,8 @@
   <div id="view-analytics" style="display:none;">
     <div class="section-eyebrow" style="font-size:22px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><rect x="7" y="12" width="2.5" height="5"/><rect x="11" y="9" width="2.5" height="8"/><rect x="15" y="6" width="2.5" height="11"/></svg>Analytics — Agent Meta <svg class="deco-dots" width="22" height="14" viewBox="0 0 30 20" fill="currentColor"><circle cx="3" cy="3" r="2"/><circle cx="13" cy="3" r="2"/><circle cx="23" cy="3" r="2"/><circle cx="3" cy="13" r="2"/><circle cx="13" cy="13" r="2"/><circle cx="23" cy="13" r="2"/></svg></div>
     <p style="color:var(--ink-dim); font-size:13px; margin:0 0 20px; max-width:64ch;">
-      Pick rates across every loaded map this season. "Pick rate" is per team-map slot — two teams
-      pick independently on every map, so the max possible rate for a universally-picked agent is 100%.
+      Pick rates across every loaded map, all seasons combined. "Pick rate" is per team-map slot — two
+      teams pick independently on every map, so the max possible rate for a universally-picked agent is 100%.
     </p>
     <div id="roleDistPanel" style="margin-bottom:20px;"></div>
     <div class="cut-panel" style="padding:20px 24px;" id="agentMetaPanel"></div>
@@ -3471,7 +3471,7 @@ async function loadMatchList(team){
     const url = new URL(API_BASE + '/matches');
     url.searchParams.set('limit', '30');
     if(team) url.searchParams.set('team', team);
-    const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
     if(!res.ok) throw new Error('bad response');
     const json = await res.json();
     usingLiveList = true;
@@ -3503,7 +3503,7 @@ async function loadHighlights(candidates){
   const results = await Promise.all(pool.map(async m => {
     if(DATA[m.match_id] && DATA[m.match_id].ranked_factors) return DATA[m.match_id];
     try{
-      const res = await fetch(`${API_BASE}/matches/${m.match_id}/verdict`, { signal: AbortSignal.timeout(2500) });
+      const res = await fetch(`${API_BASE}/matches/${m.match_id}/verdict`, { signal: AbortSignal.timeout(6000) });
       if(res.ok){ const v = await res.json(); DATA[m.match_id] = v; return v; }
     }catch(e){ /* skip this one */ }
     return null;
@@ -3788,7 +3788,7 @@ function renderVerdict(id){
 async function loadTimeline(matchId, teamA, teamB){
   let timeline = null;
   try{
-    const res = await fetch(`${API_BASE}/matches/${matchId}/timeline`, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(`${API_BASE}/matches/${matchId}/timeline`, { signal: AbortSignal.timeout(5000) });
     if(res.ok) timeline = await res.json();
   }catch(e){ /* fall through to demo */ }
   if(!timeline) timeline = MATCH_TIMELINES[matchId];
@@ -3927,7 +3927,7 @@ async function showVerdict(id){
   el.innerHTML = `<div style="padding:60px 0; text-align:center; color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; font-size:13px;">loading verdict…</div>`;
 
   try{
-    const res = await fetch(`${API_BASE}/matches/${id}/verdict`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${API_BASE}/matches/${id}/verdict`, { signal: AbortSignal.timeout(6000) });
     if(res.ok){
       DATA[id] = await res.json();
     }
@@ -3947,7 +3947,7 @@ async function showVerdict(id){
 async function loadTeams(){
   const el = document.getElementById('teamGrid');
   try{
-    const res = await fetch(`${API_BASE}/teams`, { signal: AbortSignal.timeout(1500) });
+    const res = await fetch(`${API_BASE}/teams`, { signal: AbortSignal.timeout(4000) });
     if(!res.ok) throw new Error('bad response');
     const json = await res.json();
     renderTeamGrid(json.teams);
@@ -3976,7 +3976,7 @@ async function showTeamProfile(teamId){
 
   let profile = null;
   try{
-    const res = await fetch(`${API_BASE}/teams/${teamId}/profile`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${API_BASE}/teams/${teamId}/profile`, { signal: AbortSignal.timeout(5000) });
     if(res.ok) profile = await res.json();
   }catch(e){ /* fall through to demo */ }
   if(!profile) profile = TEAM_PROFILES[teamId];
@@ -4136,7 +4136,7 @@ const STAT_ICONS = {
 async function loadOverview(){
   let stats = null;
   try{
-    const res = await fetch(`${API_BASE}/stats/overview`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE}/stats/overview`, { signal: AbortSignal.timeout(5000) });
     if(res.ok) stats = await res.json();
   }catch(e){ /* fall through to demo */ }
   if(!stats) stats = OVERVIEW_STATS;
@@ -4259,7 +4259,7 @@ async function showAnalytics(){
   switchView('view-analytics');
   let meta = null;
   try{
-    const res = await fetch(`${API_BASE}/stats/meta`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${API_BASE}/stats/meta`, { signal: AbortSignal.timeout(4000) });
     if(res.ok) meta = await res.json();
   }catch(e){ /* fall through to demo */ }
   if(!meta) meta = META_STATS;
@@ -4290,7 +4290,7 @@ function renderAgentMeta(agents){
   const el = document.getElementById('agentMetaPanel');
   if(!agents || agents.length === 0){ el.innerHTML = '<p style="color:var(--ink-faint); font-size:12px;">No agent pick data loaded.</p>'; return; }
   el.innerHTML = `
-    <div class="font-mono" style="font-size:11px; color:var(--ink-faint); margin-bottom:14px;">AGENT PICK RATES — SEASON</div>
+    <div class="font-mono" style="font-size:11px; color:var(--ink-faint); margin-bottom:14px;">AGENT PICK RATES — ALL SEASONS</div>
     ${agents.map(a => {
       const color = ROLE_COLOR[a.role] || 'var(--ink-faint)';
       return `
@@ -4373,7 +4373,7 @@ function onPlayerInput(prefix, i){
   _playerSearchDebounce[key] = setTimeout(async () => {
     let players = [];
     try{
-      const res = await fetch(`${API_BASE}/players/search?q=${encodeURIComponent(val)}`, { signal: AbortSignal.timeout(1500) });
+      const res = await fetch(`${API_BASE}/players/search?q=${encodeURIComponent(val)}`, { signal: AbortSignal.timeout(3000) });
       if(res.ok){ const json = await res.json(); players = json.players; }
     }catch(e){
       // offline fallback — search across the names we already have locally (overview + team profiles)
@@ -4410,7 +4410,7 @@ async function simulateRoster(){
     const url = new URL(`${API_BASE}/roster-builder/simulate`);
     url.searchParams.set('team_a', namesA.join(','));
     url.searchParams.set('team_b', namesB.join(','));
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if(res.ok){ data = await res.json(); usingLive = true; }
     else{
       const err = await res.json().catch(()=>({detail:'request failed'}));

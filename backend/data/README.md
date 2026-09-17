@@ -9,7 +9,7 @@ data/
 ├── processed/                 (empty — reserved for normalized/derived data)
 ├── dataset_report.md          full field inventory (every table, column, dtype, null %, sample values)
 ├── DATA_QUALITY_FINDINGS.md   real data-quality issues found and handled while building the ETL
-└── valorant_test_2025.db      the loaded SQLite database (2025 season)
+└── valorant.db                 the loaded SQLite database, all 6 seasons combined (gitignored — ~180MB, see root README)
 ```
 
 ## Source

@@ -21,7 +21,10 @@ curl http://127.0.0.1:8000/health
 curl "http://127.0.0.1:8000/matches?team=Paper+Rex&limit=3"
 curl http://127.0.0.1:8000/matches/542195
 curl http://127.0.0.1:8000/matches/542195/verdict
-curl http://127.0.0.1:8000/games/233397/verdict
+curl "http://127.0.0.1:8000/matches?year=2022&limit=3"
+curl "http://127.0.0.1:8000/teams?q=sentinels"
+curl "http://127.0.0.1:8000/players/leaderboard?metric=rating&limit=5"
+curl "http://127.0.0.1:8000/stats/meta?year=2025&map=Bind"
 ```
 
 `GET /matches/542195/verdict` should return Paper Rex as the winner with
@@ -29,9 +32,9 @@ curl http://127.0.0.1:8000/games/233397/verdict
 
 ## Configuration
 
-`main.py` defaults to `backend/data/valorant_test_2025.db` (relative to its
-own location). Point it at a different database with an environment
-variable:
+`main.py` defaults to `backend/data/valorant.db` (relative to its own
+location) — the combined multi-year database (2021–2026). Point it at a
+different database with an environment variable:
 
 ```bash
 VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
@@ -42,17 +45,18 @@ VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | Liveness + DB reachability check |
-| GET | `/matches` | List matches (team/tournament filters, pagination) |
+| GET | `/matches` | List matches. Filters: `team`, `tournament`, `year` (2021-2026); paginated (`limit`, `offset`); response includes `total` matching the filter, not just the page size |
 | GET | `/matches/{match_id}` | Basic match info: teams, score, maps played |
 | GET | `/matches/{match_id}/verdict` | Full ranked, evidence-backed verdict for a series |
 | GET | `/games/{game_id}/verdict` | Same, scoped to a single map |
-| GET | `/teams` | Every team with at least one loaded match |
+| GET | `/teams` | Every team with at least one loaded match, all-time record + win rate, strongest first. Optional `q` name search |
 | GET | `/teams/{team_id}/profile` | Full-season team profile |
 | GET | `/matches/{match_id}/timeline` | Round-by-round win/loss + economy data |
 | GET | `/roster-builder/simulate` | Legacy Roster Builder matchup projection |
 | GET | `/players/search` | Player-name autocomplete |
+| GET | `/players/leaderboard` | Ranked player leaderboard. `metric` = `rating`\|`acs`\|`adr`\|`kast`\|`hs`, `limit` (default 20), `min_maps` (default 10) |
 | GET | `/stats/overview` | League-wide dashboard aggregates |
-| GET | `/stats/meta` | Season-wide agent pick rates / role distribution |
+| GET | `/stats/meta` | Agent pick rates / role distribution. Optional `year` and `map` filters (response includes `available_years`/`available_maps` for building filter UI) |
 
 ## Troubleshooting
 

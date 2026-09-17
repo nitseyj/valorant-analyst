@@ -41,13 +41,19 @@ def overview_counts(conn: sqlite3.Connection) -> dict:
 def season_journey(conn: sqlite3.Connection, year: int = 2025) -> list:
     """Which of the known season phases actually have loaded data, in
     real calendar order. Phases with zero matches are omitted rather
-    than shown as empty — don't imply data that isn't there."""
+    than shown as empty — don't imply data that isn't there.
+
+    `year` filters against tournaments.year — without it, phase labels
+    like "Stage 1" or "Champions" match same-named tournaments across
+    every loaded year (VCT reuses these phase names year to year), which
+    silently blends multiple seasons' match counts under one year's label
+    once more than one season is loaded."""
     out = []
     for label, name_fragment in SEASON_PHASES_2025:
         count = conn.execute(
             "SELECT COUNT(*) FROM matches m JOIN tournaments t ON m.tournament_id = t.tournament_id "
-            "WHERE t.name LIKE ?",
-            (f"%{name_fragment}%",),
+            "WHERE t.name LIKE ? AND t.year = ?",
+            (f"%{name_fragment}%", year),
         ).fetchone()[0]
         if count > 0:
             out.append({"phase": label, "matches": count})
@@ -55,6 +61,12 @@ def season_journey(conn: sqlite3.Connection, year: int = 2025) -> list:
 
 
 def top_players(conn: sqlite3.Connection, min_maps: int = 10, limit: int = 5) -> list:
+    """All-time leaderboard across every loaded year, not scoped to one
+    season — no year filter here, unlike season_journey(). A deliberate
+    choice (an all-time ACS leaderboard is a normal, well-understood
+    thing), not an oversight; see roster_builder.py for where blending
+    years together across a career actually needs its own caveat instead
+    (an individual-lineup projection, not a leaderboard)."""
     rows = conn.execute(
         """SELECT p.name, t.name AS team, AVG(s.acs) AS avg_acs, AVG(s.rating) AS avg_rating, COUNT(*) AS maps
            FROM player_game_stats s
@@ -69,6 +81,50 @@ def top_players(conn: sqlite3.Connection, min_maps: int = 10, limit: int = 5) ->
     ).fetchall()
     return [
         {"name": r[0], "team": r[1], "acs": round(r[2], 1), "rating": round(r[3], 2), "maps": r[4]}
+        for r in rows
+    ]
+
+
+# Whitelisted metric -> (real column, display label, is-a-percentage,
+# decimal places). Whitelisted rather than interpolating a raw query-string
+# value into SQL — `metric` only ever selects one of these fixed, known-safe
+# column names, never arbitrary user text.
+LEADERBOARD_METRICS = {
+    "rating": ("rating", "Rating", False, 2),
+    "acs": ("acs", "ACS", False, 1),
+    "adr": ("adr", "ADR", False, 1),
+    "kast": ("kast_pct", "KAST%", True, 1),
+    "hs": ("hs_pct", "HS%", True, 1),
+}
+
+
+def players_leaderboard(conn: sqlite3.Connection, metric: str = "acs", min_maps: int = 10, limit: int = 20) -> list:
+    """Full ranked leaderboard for the Players page — unlike top_players()
+    (a fixed ACS-only top-5 for the home dashboard mini-widget), this ranks
+    by any of LEADERBOARD_METRICS and returns up to `limit` players."""
+    if metric not in LEADERBOARD_METRICS:
+        raise ValueError(f"unknown metric {metric!r}; choose one of {sorted(LEADERBOARD_METRICS)}")
+    column, label, is_pct, decimals = LEADERBOARD_METRICS[metric]
+    rows = conn.execute(
+        f"""SELECT p.name, t.name AS team, AVG(s.{column}) AS val, AVG(s.rating) AS avg_rating, COUNT(*) AS maps
+            FROM player_game_stats s
+            JOIN players p ON s.player_id = p.player_id
+            JOIN teams t ON s.team_id = t.team_id
+            WHERE s.side = 'both' AND s.{column} IS NOT NULL
+            GROUP BY s.player_id
+            HAVING maps >= ?
+            ORDER BY val DESC
+            LIMIT ?""",
+        (min_maps, limit),
+    ).fetchall()
+    value_mult = 100 if is_pct else 1
+    return [
+        {
+            "name": r[0], "team": r[1],
+            "value": round(r[2] * value_mult, decimals),
+            "rating": round(r[3], 2) if r[3] is not None else None,
+            "maps": r[4],
+        }
         for r in rows
     ]
 
