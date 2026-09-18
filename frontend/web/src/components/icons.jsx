@@ -76,6 +76,14 @@ export function SearchIcon(props) {
     </Svg>
   )
 }
+export function CompareIcon(props) {
+  return (
+    <Svg {...stroke} {...props}>
+      <circle cx="9" cy="12" r="6.5" />
+      <circle cx="15" cy="12" r="6.5" />
+    </Svg>
+  )
+}
 export function BackIcon(props) {
   return (
     <Svg fill="none" {...props}>

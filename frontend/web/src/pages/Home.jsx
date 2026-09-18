@@ -12,7 +12,13 @@ export default function Home({ onOpenMatch, onOpenTeam }) {
   const [highlights, setHighlights] = useState(null)
 
   useEffect(() => {
-    getOverview().then(setStats)
+    let cancelled = false
+    getOverview().then((data) => {
+      if (!cancelled) setStats(data)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -47,7 +53,14 @@ export default function Home({ onOpenMatch, onOpenTeam }) {
       const roster = m.roster ? [...(m.roster.team_a || []), ...(m.roster.team_b || [])] : []
       const found = roster.find((p) => p.name === mvp.name)
       const color = mvp.team === m.team_a ? 'var(--color-brand)' : 'var(--color-team-b)'
-      return { name: mvp.name, rating: found ? found.rating : null, color, matchId: m.match_id, team: mvp.team }
+      return {
+        name: mvp.name,
+        rating: found ? found.rating : null,
+        agent: found ? found.best_agent : null,
+        color,
+        matchId: m.match_id,
+        team: mvp.team,
+      }
     })
     .filter(Boolean)
 
@@ -142,7 +155,7 @@ export default function Home({ onOpenMatch, onOpenTeam }) {
                 onClick={() => onOpenMatch(n.matchId)}
                 className="flex flex-col items-center gap-1.5 shrink-0"
               >
-                <PlayerPortrait color={n.color} size={44} />
+                <PlayerPortrait agent={n.agent} color={n.color} size={56} />
                 <div className="text-[11px] font-mono">{n.name}</div>
                 {n.rating != null && <div className="text-[10px] font-mono text-ink-faint">{n.rating.toFixed(2)} rtg</div>}
                 <div className="text-[10px] text-ink-faint max-w-[70px] truncate">{n.team}</div>
@@ -161,7 +174,7 @@ export default function Home({ onOpenMatch, onOpenTeam }) {
               {stats.top_players.map((p, i) => (
                 <div key={p.name} className="flex items-center gap-3 py-2 border-t border-line-soft first:border-t-0">
                   <span className="font-mono text-xs text-ink-faint w-5">#{i + 1}</span>
-                  <PlayerPortrait color="var(--color-brand)" size={30} />
+                  <PlayerPortrait agent={p.best_agent} color="var(--color-brand)" size={38} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-semibold truncate">{p.name}</div>
                     <div className="text-[11px] text-ink-faint">{p.team}</div>

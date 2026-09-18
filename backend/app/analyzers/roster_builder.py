@@ -31,9 +31,9 @@ vs their 2025 form" specifically, only their all-time average.
 import sqlite3
 
 try:
-    from .agent_analysis import AGENT_ROLES, CORE_ROLES
+    from .agent_analysis import AGENT_ROLES, CORE_ROLES, best_agents_for_players
 except ImportError:
-    from agent_analysis import AGENT_ROLES, CORE_ROLES
+    from agent_analysis import AGENT_ROLES, CORE_ROLES, best_agents_for_players
 
 
 def search_players(conn: sqlite3.Connection, query: str, limit: int = 8) -> list:
@@ -50,6 +50,7 @@ def search_players(conn: sqlite3.Connection, query: str, limit: int = 8) -> list
            LIMIT ?""",
         (f"%{query}%", limit),
     ).fetchall()
+    best_agents = best_agents_for_players(conn, [player_id for player_id, _ in rows])
     results = []
     for player_id, name in rows:
         team_row = conn.execute(
@@ -57,7 +58,11 @@ def search_players(conn: sqlite3.Connection, query: str, limit: int = 8) -> list
                WHERE s.player_id = ? GROUP BY s.team_id ORDER BY COUNT(*) DESC LIMIT 1""",
             (player_id,),
         ).fetchone()
-        results.append({"name": name, "team": team_row[0] if team_row else None})
+        results.append({
+            "name": name,
+            "team": team_row[0] if team_row else None,
+            "best_agent": best_agents.get(player_id, {}).get("agent"),
+        })
     return results
 
 
@@ -88,6 +93,12 @@ def _resolve_player(conn, name):
     ).fetchone()
     primary_agent = agent_rows[0] if agent_rows else None
     primary_role = AGENT_ROLES.get(primary_agent, "Unknown") if primary_agent else "Unknown"
+    # primary_agent (most-played) drives role-coverage checks below — role
+    # coverage should reflect what a player actually plays most, not a
+    # one-off hot map. best_agent (highest-rated, well-sampled) is a
+    # separate field purely for the profile icon photo, same definition
+    # used everywhere else the icon appears.
+    best_agent = best_agents_for_players(conn, [player_id]).get(player_id, {}).get("agent")
 
     team_row = conn.execute(
         """SELECT t.name FROM player_game_stats s JOIN teams t ON s.team_id = t.team_id
@@ -105,6 +116,7 @@ def _resolve_player(conn, name):
         "acs": round(avg_acs, 1) if avg_acs is not None else None,
         "primary_agent": primary_agent,
         "primary_role": primary_role,
+        "best_agent": best_agent,
         "ambiguous_name": ambiguous,
         "low_sample": maps < 10,
     }

@@ -38,6 +38,58 @@ AGENT_ROLES = {
 }
 CORE_ROLES = {"Controller", "Sentinel"}  # comps missing either of these are a known meta weakness
 
+MIN_MAPS_FOR_BEST_AGENT = 3  # below this, one hot map can make a rarely-played agent look like a player's "best"
+
+
+def best_agents_for_players(conn: sqlite3.Connection, player_ids: list) -> dict:
+    """Batched "which agent has this player historically performed best
+    on?" lookup — used for the player profile icon (an agent photo, not a
+    real player photo — see project design principles). One query for
+    however many player_ids are asked for, not one query per player,
+    since this runs once per page (leaderboards, rosters) for up to ~20
+    players at a time.
+
+    "Best" = highest average rating among agents played at least
+    MIN_MAPS_FOR_BEST_AGENT times, same reasoning as players_leaderboard's
+    min_maps and team_profile's min_matches_for_ranking: a single hot map
+    on a rarely-played agent shouldn't outrank a well-established main.
+    Players below that threshold on every agent still get an answer (their
+    most-played agent) — same tiered fallback as list_teams(), nothing
+    hidden, just deprioritized. Returns {player_id: {"agent": str,
+    "maps_played": int, "avg_rating": float|None}}, only for player_ids
+    that have at least one agent row.
+    """
+    if not player_ids:
+        return {}
+    qmarks = ",".join("?" * len(player_ids))
+    cur = conn.execute(
+        f"""SELECT pga.player_id, a.name AS agent, COUNT(*) AS maps, AVG(s.rating) AS avg_rating
+            FROM player_game_agents pga
+            JOIN agents a ON a.agent_id = pga.agent_id
+            JOIN player_game_stats s
+              ON s.game_id = pga.game_id AND s.player_id = pga.player_id AND s.side = 'both'
+            WHERE pga.player_id IN ({qmarks})
+            GROUP BY pga.player_id, pga.agent_id""",
+        list(player_ids),
+    )
+    by_player: dict = {}
+    for player_id, agent, maps, avg_rating in cur.fetchall():
+        by_player.setdefault(player_id, []).append((agent, maps, avg_rating))
+
+    best = {}
+    for player_id, candidates in by_player.items():
+        candidates.sort(
+            key=lambda c: (c[1] >= MIN_MAPS_FOR_BEST_AGENT, c[2] if c[2] is not None else -1, c[1]),
+            reverse=True,
+        )
+        agent, maps, avg_rating = candidates[0]
+        best[player_id] = {
+            "agent": agent,
+            "maps_played": maps,
+            "avg_rating": round(avg_rating, 2) if avg_rating is not None else None,
+        }
+    return best
+
 
 @dataclass
 class Evidence:

@@ -20,6 +20,7 @@ endpoint reference):
     curl http://127.0.0.1:8000/matches/542195/verdict
 """
 
+import functools
 import os
 import sqlite3
 from pathlib import Path
@@ -34,6 +35,7 @@ from app.analyzers import overview_stats
 from app.analyzers import match_timeline
 from app.analyzers import roster_builder
 from app.analyzers import meta_stats
+from app.analyzers import radar_stats
 
 # --------------------------------------------------------------------
 # Database
@@ -47,6 +49,20 @@ DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "valorant.db
 DB_PATH = Path(os.environ.get("VALORANT_DB_PATH", DEFAULT_DB_PATH))
 
 
+# The loaded database is static for the lifetime of the process — nothing
+# in this app writes to it, so the analyzer results below are safe to
+# cache in-process by their (hashable) request params. This matters more
+# than it might look: the frontend's dev build fires several of these
+# concurrently on a single page load (React StrictMode double-invokes
+# every effect, and Home alone requests 5 match verdicts + the overview),
+# and each verdict is a CPU-bound computation across 6 analyzer modules
+# that contends for the GIL with everything else in flight. Measured via
+# a realistic concurrent-load simulation: an uncached request queued
+# behind that load took 2.5s+ end-to-end — enough to occasionally outrun
+# a frontend fetch timeout. Caching turns every repeat (and StrictMode's
+# guaranteed-duplicate first call) into a same-process dict lookup instead
+# of a re-run, which is the actual fix — a longer timeout alone would
+# just wait longer for a symptom, not remove the causes of the load.
 def get_connection() -> sqlite3.Connection:
     if not DB_PATH.exists():
         raise HTTPException(
@@ -98,6 +114,7 @@ def health():
 
 
 @app.get("/matches")
+@functools.lru_cache(maxsize=64)
 def list_matches(
     team: Optional[str] = Query(None, description="Filter by team name (partial match)"),
     tournament: Optional[str] = Query(None, description="Filter by tournament name (partial match)"),
@@ -182,6 +199,7 @@ def get_match(match_id: int):
 
 
 @app.get("/matches/{match_id}/verdict")
+@functools.lru_cache(maxsize=512)
 def get_match_verdict(match_id: int):
     """The core endpoint: runs every analyzer against this match (series-level,
     aggregated across all maps) and returns a ranked, evidence-backed verdict."""
@@ -196,6 +214,7 @@ def get_match_verdict(match_id: int):
 
 
 @app.get("/games/{game_id}/verdict")
+@functools.lru_cache(maxsize=512)
 def get_game_verdict(game_id: int):
     """Same idea as /matches/{id}/verdict but scoped to a single map, for
     when the frontend is showing one specific map rather than the series."""
@@ -233,25 +252,95 @@ def get_game_verdict(game_id: int):
 
 
 @app.get("/teams")
-def get_teams(q: Optional[str] = Query(None, description="Filter by team name (partial match)")):
+@functools.lru_cache(maxsize=64)
+def get_teams(
+    q: Optional[str] = Query(None, description="Filter by team name (partial match)"),
+    tier: Optional[str] = Query(
+        None, description="tier1 (international/franchised orgs only) | tier2 (everyone else). Omit for every loaded team."
+    ),
+):
     """Every team with at least one loaded match, strongest (by all-time
-    win rate) first. Optional `q` filters by name substring."""
+    win rate) first. Optional `q` filters by name substring. Optional
+    `tier` filters to Tier-1 (Champions/Masters/franchised-league orgs,
+    ~190 teams) or Tier-2 (everyone else) — with 4,000+ teams loaded,
+    this is also what keeps the default view fast rather than pulling
+    and ranking every team on every request."""
+    if tier is not None and tier not in ("tier1", "tier2"):
+        raise HTTPException(status_code=400, detail="tier must be 'tier1' or 'tier2'")
     conn = get_connection()
     try:
-        return {"teams": team_profile.list_teams(conn, q=q)}
+        return {"teams": team_profile.list_teams(conn, q=q, tier=tier)}
     finally:
         conn.close()
 
 
 @app.get("/teams/{team_id}/profile")
-def get_team_profile(team_id: int):
+@functools.lru_cache(maxsize=256)
+def get_team_profile(
+    team_id: int,
+    year: Optional[int] = Query(None, description="Scope the roster (top_players) to one loaded year, e.g. 2025. Falls back to all-time if that team has no data for the year."),
+):
     """Full-season profile for one team: record, map pool, top players,
     agent usage, and recent matches — aggregated across every loaded
     match, not scoped to one match_id like /matches/{id}/verdict is."""
     conn = get_connection()
     try:
         try:
-            return team_profile.build_team_profile(conn, team_id)
+            return team_profile.build_team_profile(conn, team_id, year=year)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/teams/{team_id}/map-leaders")
+@functools.lru_cache(maxsize=256)
+def get_team_map_leaders(team_id: int, map: str = Query(..., description="Map name, e.g. Bind")):
+    """On-demand, click-through stats for one team on one map: most
+    kills, most assists, most effective (highest avg rating) player.
+    Kept out of the main profile payload since most maps in a pool are
+    never clicked."""
+    conn = get_connection()
+    try:
+        try:
+            return team_profile.map_leaders(conn, team_id, map)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/teams/{team_id}/radar")
+@functools.lru_cache(maxsize=256)
+def get_team_radar(
+    team_id: int,
+    compare_with: Optional[int] = Query(None, description="A second team_id to overlay on the same chart, normalized against the same bounds"),
+):
+    """5-axis (win rate, round win rate, avg rating, avg ACS, clutches/map)
+    stat profile for a team, optionally paired with a second team for a
+    head-to-head radar chart."""
+    conn = get_connection()
+    try:
+        try:
+            return radar_stats.team_radar_comparison(conn, team_id, compare_team_id=compare_with)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/players/radar")
+@functools.lru_cache(maxsize=256)
+def get_player_radar(
+    name: str = Query(..., description="Exact player name"),
+    compare_with: Optional[str] = Query(None, description="A second player's exact name to overlay on the same chart, normalized against the same bounds"),
+):
+    """5-axis (Rating, ACS, ADR, KAST%, HS%) stat profile for a player,
+    optionally paired with a second player for a head-to-head radar chart."""
+    conn = get_connection()
+    try:
+        try:
+            return radar_stats.player_radar_comparison(conn, name, compare_name=compare_with)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
     finally:
@@ -259,6 +348,7 @@ def get_team_profile(team_id: int):
 
 
 @app.get("/stats/overview")
+@functools.lru_cache(maxsize=1)
 def get_overview_stats():
     """League-wide aggregates for the home dashboard: counts, season
     journey, top players, team performance leaderboard, map play counts."""
@@ -316,6 +406,7 @@ def search_players(q: str):
 
 
 @app.get("/players/leaderboard")
+@functools.lru_cache(maxsize=64)
 def get_players_leaderboard(
     metric: str = Query("acs", description="rating | acs | adr | kast | hs"),
     limit: int = Query(20, ge=1, le=100),
@@ -335,6 +426,7 @@ def get_players_leaderboard(
 
 
 @app.get("/stats/meta")
+@functools.lru_cache(maxsize=64)
 def get_meta_stats(
     year: Optional[int] = Query(None, description="Filter by season year (2021-2026)"),
     map_name: Optional[str] = Query(None, alias="map", description="Filter by map name, e.g. Bind"),

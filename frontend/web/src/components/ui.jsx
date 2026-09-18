@@ -46,7 +46,13 @@ export function SectionHeader({ children, className = '' }) {
 
 export function StatCard({ icon, label, value }) {
   return (
-    <div className="cut-corner-sm bg-panel border border-line flex items-center gap-3 p-4">
+    <div className="relative cut-corner-sm bg-panel border border-line flex items-center gap-3 p-4">
+      {/* Small diagonal accent filling the clipped corner notch — same
+          corner-accent language as the stat cards in the inspired UI kit. */}
+      <span
+        className="absolute top-0 right-0 w-[9px] h-[9px] pointer-events-none"
+        style={{ background: 'var(--color-brand)', clipPath: 'polygon(100% 0, 100% 100%, 0 0)', opacity: 0.7 }}
+      />
       <div className="w-9 h-9 rounded-sm bg-brand-dim text-brand flex items-center justify-center shrink-0">{icon}</div>
       <div className="min-w-0">
         <div className="font-display text-2xl font-bold leading-none">{value}</div>
@@ -86,15 +92,32 @@ export function Pips({ scoreStr }) {
   for (let i = 0; i < a; i++) pips.push({ color: 'var(--color-brand)', key: `a${i}` })
   for (let i = 0; i < b; i++) pips.push({ color: 'var(--color-team-b)', key: `b${i}` })
   return (
-    <div className="flex flex-wrap gap-[3px]">
+    <div className="flex flex-wrap gap-[5px]">
       {pips.map((p, i) => (
         <span
           key={p.key}
-          className="w-[9px] h-[9px] rounded-[1px] opacity-0 animate-[reveal_.3s_ease_forwards]"
+          className="w-[13px] h-[13px] rounded-[2px] opacity-0 animate-[reveal_.3s_ease_forwards]"
           style={{ background: p.color, animationDelay: `${i * 18}ms` }}
         />
       ))}
     </div>
+  )
+}
+
+// Round-win totals for one map, each number in its team's own accent color
+// and the winning side bolded/full-brightness — so "who won this map" reads
+// at a glance instead of requiring the reader to cross-reference the pip
+// colors against the header above.
+export function MapScoreLine({ scoreStr }) {
+  const [a, b] = scoreStr.split('-').map(Number)
+  const aWon = a > b
+  const bWon = b > a
+  return (
+    <span className="font-mono text-sm shrink-0 flex items-center gap-1.5">
+      <span style={{ color: 'var(--color-brand)' }} className={aWon ? 'font-bold' : 'opacity-60'}>{a}</span>
+      <span className="text-ink-faint">–</span>
+      <span style={{ color: 'var(--color-team-b)' }} className={bWon ? 'font-bold' : 'opacity-60'}>{b}</span>
+    </span>
   )
 }
 

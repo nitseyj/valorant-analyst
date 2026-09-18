@@ -13,10 +13,10 @@ function StatCell({ label, value }) {
 export default function PlayerStatRow({ pl, color = 'var(--color-brand)' }) {
   return (
     <ExpandableRow
-      indent="pl-[62px]"
+      indent="pl-[72px]"
       header={
         <>
-          <PlayerPortrait color={color} size={34} />
+          <PlayerPortrait agent={pl.best_agent} color={color} size={44} />
           <div className="flex-1 min-w-0 flex items-baseline justify-between gap-2.5">
             <span className="font-display font-semibold text-sm">{pl.name}</span>
             <span className="font-mono text-[13px]" style={{ color }}>

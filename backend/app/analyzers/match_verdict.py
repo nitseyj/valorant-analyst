@@ -96,7 +96,7 @@ def _roster(conn, match_id, team_id):
     on the side dimension). Full stat line, not just rating — a rating-
     only roster doesn't answer "what did this player actually do"."""
     cur = conn.execute(
-        """SELECT p.name, COUNT(*) AS maps_played, AVG(s.rating) AS avg_rating,
+        """SELECT p.player_id, p.name, COUNT(*) AS maps_played, AVG(s.rating) AS avg_rating,
                   AVG(s.acs) AS avg_acs, AVG(s.adr) AS avg_adr, AVG(s.kast_pct) AS avg_kast,
                   SUM(s.kills) AS total_kills, SUM(s.deaths) AS total_deaths, SUM(s.assists) AS total_assists,
                   SUM(s.first_kills) AS total_fk, SUM(s.first_deaths) AS total_fd
@@ -109,9 +109,11 @@ def _roster(conn, match_id, team_id):
            LIMIT 5""",
         (match_id, team_id),
     )
+    rows = cur.fetchall()
+    best_agents = agent_analysis.best_agents_for_players(conn, [row[0] for row in rows])
     out = []
-    for row in cur.fetchall():
-        name, maps, rating, acs, adr, kast, kills, deaths, assists, fk, fd = row
+    for row in rows:
+        player_id, name, maps, rating, acs, adr, kast, kills, deaths, assists, fk, fd = row
         out.append({
             "name": name,
             "maps_played": maps,
@@ -121,6 +123,7 @@ def _roster(conn, match_id, team_id):
             "kast_pct": round(kast, 3) if kast is not None else None,
             "kills": kills, "deaths": deaths, "assists": assists,
             "first_kills": fk, "first_deaths": fd,
+            "best_agent": best_agents.get(player_id, {}).get("agent"),
         })
     return out
 

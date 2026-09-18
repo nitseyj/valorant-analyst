@@ -71,12 +71,18 @@ export async function getTimeline(id) {
   }
 }
 
-export async function listTeams({ q } = {}) {
+export async function listTeams({ q, tier } = {}) {
   try {
-    const params = q ? `?${new URLSearchParams({ q })}` : ''
-    const json = await getJSON(`/teams${params}`, { timeout: 4000 })
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    if (tier) params.set('tier', tier)
+    const qs = params.toString() ? `?${params}` : ''
+    const json = await getJSON(`/teams${qs}`, { timeout: 4000 })
     return { teams: json.teams, live: true }
   } catch {
+    // Demo fallback has no tournament data to classify by tier, so the
+    // tier filter is a no-op here rather than a guess — real behavior
+    // only once the live API is reachable.
     let teams = Object.entries(demoTeamProfiles).map(([team_id, p]) => ({
       team_id, name: p.name, matches: p.record?.matches, wins: p.record?.wins, win_rate: p.win_rate, ranked: true,
     }))
@@ -89,11 +95,47 @@ export async function listTeams({ q } = {}) {
   }
 }
 
-export async function getTeamProfile(teamId) {
+export async function getTeamProfile(teamId, { year } = {}) {
   try {
-    return { profile: await getJSON(`/teams/${teamId}/profile`, { timeout: 5000 }), live: true }
+    const qs = year ? `?${new URLSearchParams({ year: String(year) })}` : ''
+    return { profile: await getJSON(`/teams/${teamId}/profile${qs}`, { timeout: 5000 }), live: true }
   } catch {
     return { profile: demoTeamProfiles[teamId] || null, live: false }
+  }
+}
+
+export async function getTeamMapLeaders(teamId, mapName) {
+  // No bundled demo equivalent for this — an offline/unreachable backend
+  // means this feature just isn't available rather than showing invented
+  // per-map leaders.
+  try {
+    return await getJSON(`/teams/${teamId}/map-leaders?${new URLSearchParams({ map: mapName })}`, { timeout: 8000 })
+  } catch {
+    return null
+  }
+}
+
+// Radar's backend cost is the highest of anything on the team-profile page
+// (a full bounds scan across every qualifying team/player the first time
+// it's requested — see backend/app/main.py's lru_cache comment) — 8s, not
+// the 4-5s used elsewhere, is deliberate headroom for that cold-cache case
+// rather than a copy-paste of the other timeouts.
+export async function getTeamRadar(teamId, compareWith) {
+  try {
+    const params = compareWith ? `?${new URLSearchParams({ compare_with: String(compareWith) })}` : ''
+    return await getJSON(`/teams/${teamId}/radar${params}`, { timeout: 8000 })
+  } catch {
+    return null
+  }
+}
+
+export async function getPlayerRadar(name, compareWith) {
+  try {
+    const params = new URLSearchParams({ name })
+    if (compareWith) params.set('compare_with', compareWith)
+    return await getJSON(`/players/radar?${params}`, { timeout: 8000 })
+  } catch {
+    return null
   }
 }
 

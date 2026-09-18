@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getMatchVerdict, getTimeline } from '../lib/api'
 import { extractMvp, impactColor } from '../lib/format'
 import { CategoryIcon, MapGlyph, TrophyIcon, DividerDeco } from '../components/icons'
-import { Panel, SectionHeader, ImpactBar, ExpandableRow, Pips, LoadingState, EmptyState } from '../components/ui'
+import { Panel, SectionHeader, ImpactBar, ExpandableRow, Pips, MapScoreLine, LoadingState, EmptyState } from '../components/ui'
 import EvidenceRow from '../components/EvidenceRow'
 import PlayerStatRow from '../components/PlayerStatRow'
 import TeamBadge from '../components/TeamBadge'
@@ -69,6 +69,9 @@ export default function MatchVerdict({ matchId }) {
   const primaryColor = impactColor(m.primary_factor.winner || m.winner, m.team_a)
   const mvp = m.primary_factor.category === 'Player Impact' ? extractMvp(m.primary_factor.summary) : null
   const mvpColor = mvp ? (mvp.team === m.team_a ? 'var(--color-brand)' : 'var(--color-team-b)') : null
+  const mvpAgent = mvp
+    ? [...(m.roster?.team_a || []), ...(m.roster?.team_b || [])].find((p) => p.name === mvp.name)?.best_agent
+    : null
 
   return (
     <div className="fade-up">
@@ -105,16 +108,16 @@ export default function MatchVerdict({ matchId }) {
           </div>
         </div>
 
-        <div className="relative mt-5 flex flex-col gap-3">
+        <div className="relative mt-6 flex flex-col gap-4">
           {m.map_scores.map((s, i) => (
             <div key={i}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="w-3.5 flex justify-center shrink-0 text-ink-faint">{m.maps && <MapGlyph map={m.maps[i]} />}</span>
-                {m.maps && <span className="text-xs text-ink-dim shrink-0">{m.maps[i]}</span>}
+              <div className="flex items-center gap-2.5 mb-2">
+                <span className="w-4 flex justify-center shrink-0 text-ink-faint">{m.maps && <MapGlyph map={m.maps[i]} />}</span>
+                {m.maps && <span className="text-sm text-ink-dim shrink-0">{m.maps[i]}</span>}
                 <span className="flex-1 h-px bg-line-soft" />
-                <span className="font-mono text-xs text-ink-dim shrink-0">{s}</span>
+                <MapScoreLine scoreStr={s} />
               </div>
-              <div className="pl-[22px]"><Pips scoreStr={s} /></div>
+              <div className="pl-[26px]"><Pips scoreStr={s} /></div>
             </div>
           ))}
         </div>
@@ -137,7 +140,7 @@ export default function MatchVerdict({ matchId }) {
       <Panel className="p-6 mb-7 flex gap-4 items-start" style={{ borderColor: `${primaryColor}55` }}>
         {mvp && (
           <div className="text-center shrink-0">
-            <PlayerPortrait color={mvpColor} size={46} />
+            <PlayerPortrait agent={mvpAgent} color={mvpColor} size={60} />
           </div>
         )}
         <div className="flex-1 min-w-0">

@@ -79,9 +79,34 @@
     scrollbar-width: none;
   }
   .bg-grid {
+    background-color: var(--color-bg);
     background-image:
+      /* dark dimming tint drawn ON TOP of the texture below (CSS paints
+         the first-listed background layer closest to the viewer) so the
+         generated art reads as a subtle accent, not a loud wallpaper —
+         text sitting directly on the page background (sidebar labels,
+         page margins) needs to stay legible everywhere, not just where
+         a panel's own opaque background covers it. */
+      linear-gradient(rgba(10, 10, 13, 0.66), rgba(10, 10, 13, 0.66)),
+      url('/assets/ui/bg-texture.jpg'),
       linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
       linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-    background-size: 56px 56px;
+    /* background-attachment: fixed anchors the texture to the viewport
+       (not the full scrollable page height) so a tall page doesn't
+       stretch or re-tile it — same reasoning as the corner glows this
+       replaced. Sized with `cover` rather than tiled: the source image
+       isn't a seamless/edge-matched tile, so repeating it would show
+       visible seams; `cover` just crops it to fill instead. */
+    background-size: 100% 100%, cover, 56px 56px, 56px 56px;
+    background-position: center, center, center, center;
+    background-repeat: no-repeat, no-repeat, repeat, repeat;
+    background-attachment: fixed, fixed, scroll, scroll;
+  }
+  /* Small red dot cluster, same texture used in the corners of the
+     inspired UI kit's panels/sidebar. A background-image so it never
+     adds DOM nodes — apply to any element with real positioning. */
+  .dot-texture {
+    background-image: radial-gradient(rgba(255, 59, 86, 0.5) 1px, transparent 1.5px);
+    background-size: 10px 10px;
   }
 }

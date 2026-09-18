@@ -12,6 +12,8 @@ computed honestly from what's loaded, it's left out rather than guessed.
 
 import sqlite3
 
+from app.analyzers import agent_analysis
+
 # The real 2025 VCT season phase order. This is domain knowledge (the
 # actual known tournament calendar structure), not derived from the
 # database — the schema has no explicit "phase order" field, only
@@ -68,7 +70,7 @@ def top_players(conn: sqlite3.Connection, min_maps: int = 10, limit: int = 5) ->
     years together across a career actually needs its own caveat instead
     (an individual-lineup projection, not a leaderboard)."""
     rows = conn.execute(
-        """SELECT p.name, t.name AS team, AVG(s.acs) AS avg_acs, AVG(s.rating) AS avg_rating, COUNT(*) AS maps
+        """SELECT s.player_id, p.name, t.name AS team, AVG(s.acs) AS avg_acs, AVG(s.rating) AS avg_rating, COUNT(*) AS maps
            FROM player_game_stats s
            JOIN players p ON s.player_id = p.player_id
            JOIN teams t ON s.team_id = t.team_id
@@ -79,8 +81,12 @@ def top_players(conn: sqlite3.Connection, min_maps: int = 10, limit: int = 5) ->
            LIMIT ?""",
         (min_maps, limit),
     ).fetchall()
+    best_agents = agent_analysis.best_agents_for_players(conn, [r[0] for r in rows])
     return [
-        {"name": r[0], "team": r[1], "acs": round(r[2], 1), "rating": round(r[3], 2), "maps": r[4]}
+        {
+            "name": r[1], "team": r[2], "acs": round(r[3], 1), "rating": round(r[4], 2), "maps": r[5],
+            "best_agent": best_agents.get(r[0], {}).get("agent"),
+        }
         for r in rows
     ]
 
@@ -106,7 +112,7 @@ def players_leaderboard(conn: sqlite3.Connection, metric: str = "acs", min_maps:
         raise ValueError(f"unknown metric {metric!r}; choose one of {sorted(LEADERBOARD_METRICS)}")
     column, label, is_pct, decimals = LEADERBOARD_METRICS[metric]
     rows = conn.execute(
-        f"""SELECT p.name, t.name AS team, AVG(s.{column}) AS val, AVG(s.rating) AS avg_rating, COUNT(*) AS maps
+        f"""SELECT s.player_id, p.name, t.name AS team, AVG(s.{column}) AS val, AVG(s.rating) AS avg_rating, COUNT(*) AS maps
             FROM player_game_stats s
             JOIN players p ON s.player_id = p.player_id
             JOIN teams t ON s.team_id = t.team_id
@@ -117,13 +123,15 @@ def players_leaderboard(conn: sqlite3.Connection, metric: str = "acs", min_maps:
             LIMIT ?""",
         (min_maps, limit),
     ).fetchall()
+    best_agents = agent_analysis.best_agents_for_players(conn, [r[0] for r in rows])
     value_mult = 100 if is_pct else 1
     return [
         {
-            "name": r[0], "team": r[1],
-            "value": round(r[2] * value_mult, decimals),
-            "rating": round(r[3], 2) if r[3] is not None else None,
-            "maps": r[4],
+            "name": r[1], "team": r[2],
+            "value": round(r[3] * value_mult, decimals),
+            "rating": round(r[4], 2) if r[4] is not None else None,
+            "maps": r[5],
+            "best_agent": best_agents.get(r[0], {}).get("agent"),
         }
         for r in rows
     ]

@@ -13,6 +13,7 @@ export default function TeamBadge({ name, accent = 'brand', size = 40, className
   const slug = useMemo(() => slugifyTeam(name), [name])
   const [extIndex, setExtIndex] = useState(0)
   const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   // Views like MatchVerdict/TeamProfile don't remount when you navigate to
   // a different match/team (no `key` on them in App.jsx) — they just
@@ -27,6 +28,7 @@ export default function TeamBadge({ name, accent = 'brand', size = 40, className
     setTrackedSlug(slug)
     setExtIndex(0)
     setFailed(false)
+    setLoaded(false)
   }
 
   const color = accent === 'brand' ? 'var(--color-brand)' : 'var(--color-team-b)'
@@ -46,15 +48,31 @@ export default function TeamBadge({ name, accent = 'brand', size = 40, className
 
   return (
     <div
-      className={`hexagon shrink-0 overflow-hidden ${className}`}
+      className={`hexagon shrink-0 overflow-hidden relative ${className}`}
       style={{ width: size, height: size, background: 'var(--color-panel-raised)', border: `1px solid ${line}` }}
     >
+      {/* Initials placeholder stays underneath until the real logo has
+          fully decoded, so a slow/partial image paint (e.g. a stalled dev
+          server connection) never shows as a half-drawn, off-center logo
+          — the swap only happens once the browser confirms a complete
+          decode via onLoad, not the instant a byte arrives. */}
+      {!loaded && (
+        <div
+          className="absolute inset-0 flex items-center justify-center font-display font-bold"
+          style={{ background: soft, color, fontSize: size * 0.32 }}
+        >
+          {teamInitials(name)}
+        </div>
+      )}
       <img
         src={`${LOGO_DIR}${slug}.${EXTENSIONS[extIndex]}`}
         alt={name}
         loading="lazy"
-        className="w-full h-full object-contain p-1"
+        decoding="async"
+        className={`relative w-full h-full object-contain p-1 transition-opacity duration-150 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => setLoaded(true)}
         onError={() => {
+          setLoaded(false)
           if (extIndex + 1 < EXTENSIONS.length) setExtIndex(extIndex + 1)
           else setFailed(true)
         }}

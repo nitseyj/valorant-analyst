@@ -215,3 +215,26 @@ CREATE TABLE match_draft_actions (
     map_name         TEXT NOT NULL,
     PRIMARY KEY (match_id, sequence_no)
 );
+
+
+-- ---------------------------------------------------------------------
+-- Indexes
+-- ---------------------------------------------------------------------
+-- The primary keys above don't cover every access pattern this project's
+-- analyzers actually use. Two gaps mattered enough (measured, not
+-- guessed) to fix here:
+--
+-- 1. matches.team_a_id / team_b_id: team_profile.list_teams() joins
+--    every team against the full matches table. Without these, that's
+--    effectively a scan per team (~2s for 4,000+ teams, confirmed via
+--    curl timing) instead of an indexed lookup.
+-- 2. player_game_stats.player_id / player_game_agents.player_id: the
+--    PRIMARY KEY on both leads with game_id, not player_id, so any
+--    "look up everything for this player" query (best-agent-by-player,
+--    profile icons, roster builder search) can't use it.
+
+CREATE INDEX idx_matches_team_a ON matches(team_a_id);
+CREATE INDEX idx_matches_team_b ON matches(team_b_id);
+CREATE INDEX idx_matches_tournament ON matches(tournament_id);
+CREATE INDEX idx_player_game_stats_player ON player_game_stats(player_id);
+CREATE INDEX idx_player_game_agents_player ON player_game_agents(player_id);

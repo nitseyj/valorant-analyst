@@ -32,7 +32,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-grid flex flex-col md:flex-row">
       <Sidebar view={view} onNavigate={navigate} onBack={goBack} />
-      <main className="flex-1 min-w-0 p-5 md:p-9 max-w-[1200px] mx-auto w-full">
+      <main className="flex-1 min-w-0 p-5 md:p-10 max-w-[1360px] mx-auto w-full">
         {view === 'home' && <Home onOpenMatch={openMatch} onOpenTeam={openTeam} />}
         {view === 'teams' && <Teams onOpenTeam={openTeam} />}
         {view === 'team' && <TeamProfile teamId={selectedTeamId} onOpenMatch={openMatch} />}

@@ -45,11 +45,17 @@ on Kaggle (MIT licensed).
   composition, clutch factor) each rank themselves by measured impact and
   combine into one ranked, evidence-backed verdict.
 - **Team Analyzer** — every team with loaded match data, searchable and
-  ranked strongest-first by all-time win rate; each team's full-season
-  profile (record, map pool with map art, top players, agent usage, recent
-  matches).
+  ranked strongest-first by all-time win rate, filterable by professional
+  tier (Tier 1 international/franchised orgs vs. everyone else — also
+  what keeps the browse view fast with 4,000+ teams loaded); each team's
+  full-season profile (record, map pool with map art — click a map for
+  that team's most kills/assists/effective player on it — roster
+  filterable by year, agent usage, recent matches, and a 5-axis stat
+  profile chart comparable against any other Tier-1 team).
 - **Players leaderboard** — top 20, ranked by Rating, ACS, ADR, KAST%, or
-  HS%, across every loaded season.
+  HS%, across every loaded season, each with their historically
+  best-performing agent shown as a profile photo. Pick any two players to
+  overlay their 5-axis stat profile.
 - **Matches** — browse and search by team, tournament, or year (2021–2026).
 - **Legacy Roster Builder** — build two hypothetical 5-player lineups and get
   a transparent model projection of the matchup. Always labeled a
@@ -159,10 +165,12 @@ directly in a browser for the zero-install legacy version.
 
 MIT — see [`LICENSE`](LICENSE) (matches the source dataset's license) for
 the code in this repository. This project deliberately avoids reproducing
-Riot's own game assets: player portraits are original abstract SVG
-silhouettes, and the agent/map artwork under `assets/agents/` and
-`assets/maps/` is original AI-generated illustration in an independent art
-style — not real screenshots, in-game callouts, or Riot character art. See
+Riot's own game assets: player portraits show a player's historically
+best-performing agent as original stylized art (falling back to an
+abstract SVG silhouette), not a real photo of the player, and the
+agent/map artwork under `assets/agents/` and `assets/maps/` is original
+AI-generated illustration in an independent art style — not real
+screenshots, in-game callouts, or Riot character art. See
 [`frontend/web/README.md`](frontend/web/README.md) for details. Team logo
 images are included under `assets/valorant/teams/`; if you fork this
 project, verify your own rights to redistribute those before publishing.

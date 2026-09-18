@@ -23,6 +23,11 @@ curl http://127.0.0.1:8000/matches/542195
 curl http://127.0.0.1:8000/matches/542195/verdict
 curl "http://127.0.0.1:8000/matches?year=2022&limit=3"
 curl "http://127.0.0.1:8000/teams?q=sentinels"
+curl "http://127.0.0.1:8000/teams?tier=tier1"
+curl "http://127.0.0.1:8000/teams/682/profile?year=2022"
+curl "http://127.0.0.1:8000/teams/682/map-leaders?map=Icebox"
+curl "http://127.0.0.1:8000/teams/682/radar?compare_with=2593"
+curl "http://127.0.0.1:8000/players/radar?name=Chronicle&compare_with=something"
 curl "http://127.0.0.1:8000/players/leaderboard?metric=rating&limit=5"
 curl "http://127.0.0.1:8000/stats/meta?year=2025&map=Bind"
 ```
@@ -49,8 +54,11 @@ VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
 | GET | `/matches/{match_id}` | Basic match info: teams, score, maps played |
 | GET | `/matches/{match_id}/verdict` | Full ranked, evidence-backed verdict for a series |
 | GET | `/games/{game_id}/verdict` | Same, scoped to a single map |
-| GET | `/teams` | Every team with at least one loaded match, all-time record + win rate, strongest first. Optional `q` name search |
-| GET | `/teams/{team_id}/profile` | Full-season team profile |
+| GET | `/teams` | Every team with at least one loaded match, all-time record + win rate, strongest first. Optional `q` name search, optional `tier` (`tier1`\|`tier2`) — with 4,000+ teams loaded, `tier1` (international/franchised orgs, ~190 teams) is what keeps the default view fast |
+| GET | `/teams/{team_id}/profile` | Full-season team profile. Optional `year` scopes the roster (`top_players`) to one loaded year — falls back to all-time if that team has no data for it |
+| GET | `/teams/{team_id}/map-leaders` | On-demand per-map stats for one team: most kills, most assists, most effective (highest avg rating) player. Required `map` |
+| GET | `/teams/{team_id}/radar` | 5-axis stat profile (win rate, round win rate, avg rating, avg ACS, clutches/map) for the "pentagon chart". Optional `compare_with` (a second `team_id`) overlays a head-to-head comparison on shared bounds |
+| GET | `/players/radar` | Same 5-axis idea for a player (Rating, ACS, ADR, KAST%, HS%). Required `name`, optional `compare_with` (a second player's exact name) |
 | GET | `/matches/{match_id}/timeline` | Round-by-round win/loss + economy data |
 | GET | `/roster-builder/simulate` | Legacy Roster Builder matchup projection |
 | GET | `/players/search` | Player-name autocomplete |
