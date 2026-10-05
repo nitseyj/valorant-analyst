@@ -341,9 +341,9 @@ def build_team_profile(conn: sqlite3.Connection, team_id: int, year: int = None)
         "roster_years": roster_years,
         "agent_usage": _agent_usage(conn, team_id),
         "recent_matches": _recent_matches(conn, team_id),
-        "note": "recent_matches is ordered by match_id (a rough proxy for chronological order — "
-                "the schema has no date field, so this is not guaranteed to be perfectly time-ordered "
-                "across different tournaments). top_players is all-time unless roster_year is set.",
+        "note": "recent_matches is ordered by match_id, a rough proxy for chronological order. "
+                "The schema has no date field, so it is not guaranteed to be perfectly time-ordered "
+                "across different tournaments. top_players is all-time unless roster_year is set.",
     }
 
 

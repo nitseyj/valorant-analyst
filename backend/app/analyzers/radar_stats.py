@@ -92,6 +92,9 @@ def _team_raw_stats(conn: sqlite3.Connection, team_id: int) -> dict:
     }
 
 
+_BOUNDS_CACHE: dict = {}
+
+
 def _team_metric_bounds(conn: sqlite3.Connection, min_matches: int = 10) -> dict:
     """Real min/max per metric across every team with at least
     `min_matches` matches — the normalization range for the radar chart's
@@ -105,6 +108,9 @@ def _team_metric_bounds(conn: sqlite3.Connection, min_matches: int = 10) -> dict
     per qualifying team — with 570+ teams clearing the match-count bar,
     a per-team loop like _team_raw_stats() would mean 2,000+ queries just
     to draw one chart."""
+    cache_key = ("team", min_matches)
+    if cache_key in _BOUNDS_CACHE:
+        return _BOUNDS_CACHE[cache_key]
     qualifying = conn.execute(
         """SELECT team_id, COUNT(*) AS matches FROM (
                SELECT team_a_id AS team_id FROM matches
@@ -185,7 +191,12 @@ def _team_metric_bounds(conn: sqlite3.Connection, min_matches: int = 10) -> dict
         if team_id in qualifying_ids and maps_played:
             _track("clutches_per_map", (total_clutches or 0) / maps_played)
 
+    _BOUNDS_CACHE[cache_key] = bounds
     return bounds
+
+
+def _out_of_range(value, lo, hi):
+    return value is not None and lo is not None and hi is not None and (value < lo or value > hi)
 
 
 def _normalize(value, lo, hi):
@@ -223,6 +234,7 @@ def team_radar(conn: sqlite3.Connection, team_id: int, min_matches: int = 10, bo
             "value": display,
             "is_percentage": is_pct,
             "normalized": _normalize(value, lo, hi),
+            "out_of_range": _out_of_range(value, lo, hi),
         })
     return {"team_id": team_id, "name": team[0], "matches": stats["matches"], "axes": axes}
 
@@ -255,6 +267,9 @@ def _player_metric_bounds(conn: sqlite3.Connection, min_maps: int = 10) -> dict:
     813k-row player_game_stats table once (indexed via idx_player_game_
     stats_player is not applicable here since it's a full aggregate, not
     an IN-list lookup, but the GROUP BY is a single pass, not N queries)."""
+    cache_key = ("player", min_maps)
+    if cache_key in _BOUNDS_CACHE:
+        return _BOUNDS_CACHE[cache_key]
     rows = conn.execute(
         """SELECT AVG(rating), AVG(acs), AVG(adr), AVG(kast_pct), AVG(hs_pct)
            FROM player_game_stats
@@ -263,15 +278,16 @@ def _player_metric_bounds(conn: sqlite3.Connection, min_maps: int = 10) -> dict:
            HAVING COUNT(*) >= ?""",
         (min_maps,),
     ).fetchall()
-    bounds = {key: [None, None] for key, _, _, _ in PLAYER_RADAR_METRICS}
-    keys = [key for key, _, _, _ in PLAYER_RADAR_METRICS]
+    bounds = {metric: [None, None] for metric, _, _, _ in PLAYER_RADAR_METRICS}
+    metrics = [metric for metric, _, _, _ in PLAYER_RADAR_METRICS]
     for row in rows:
-        for i, key in enumerate(keys):
+        for i, metric in enumerate(metrics):
             val = row[i]
             if val is None:
                 continue
-            lo, hi = bounds[key]
-            bounds[key] = [val if lo is None else min(lo, val), val if hi is None else max(hi, val)]
+            lo, hi = bounds[metric]
+            bounds[metric] = [val if lo is None else min(lo, val), val if hi is None else max(hi, val)]
+    _BOUNDS_CACHE[cache_key] = bounds
     return bounds
 
 
@@ -317,6 +333,7 @@ def player_radar(conn: sqlite3.Connection, name: str, min_maps: int = 10, bounds
             "value": display,
             "is_percentage": is_pct,
             "normalized": _normalize(value, lo, hi),
+            "out_of_range": _out_of_range(value, lo, hi),
         })
     best_agent = agent_analysis.best_agents_for_players(conn, [player_id]).get(player_id, {}).get("agent")
     return {"name": name, "maps_played": stats["maps_played"], "best_agent": best_agent, "axes": axes}
