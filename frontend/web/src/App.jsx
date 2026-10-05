@@ -11,28 +11,42 @@ import LegacyBuilder from './pages/LegacyBuilder'
 
 export default function App() {
   const [view, setView] = useState('home')
+  const [history, setHistory] = useState([])
   const [selectedTeamId, setSelectedTeamId] = useState(null)
   const [selectedMatchId, setSelectedMatchId] = useState(null)
 
+  // Back walks the navigation history one step at a time, so Home > Team >
+  // Match > Back lands on Team, and a second Back returns to Home.
   function openTeam(teamId) {
+    setHistory((h) => [...h, view])
     setSelectedTeamId(teamId)
     setView('team')
   }
   function openMatch(matchId) {
+    setHistory((h) => [...h, view])
     setSelectedMatchId(matchId)
     setView('verdict')
   }
   function navigate(next) {
+    setHistory([])
     setView(next)
   }
   function goBack() {
-    setView(view === 'verdict' ? 'matches' : view === 'team' ? 'teams' : 'home')
+    const previous = history[history.length - 1] || 'home'
+    setHistory((h) => h.slice(0, -1))
+    setView(previous)
   }
 
   return (
     <div className="min-h-screen bg-grid flex flex-col md:flex-row">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-brand focus:text-[#14060a] focus:px-4 focus:py-2 focus:font-mono focus:text-sm"
+      >
+        Skip to content
+      </a>
       <Sidebar view={view} onNavigate={navigate} onBack={goBack} />
-      <main className="flex-1 min-w-0 p-5 md:p-10 max-w-[1360px] mx-auto w-full">
+      <main id="main" tabIndex={-1} className="flex-1 min-w-0 px-5 py-7 md:px-10 md:py-9 max-w-[1360px] mx-auto w-full">
         {view === 'home' && <Home onOpenMatch={openMatch} onOpenTeam={openTeam} />}
         {view === 'teams' && <Teams onOpenTeam={openTeam} />}
         {view === 'team' && <TeamProfile teamId={selectedTeamId} onOpenMatch={openMatch} />}

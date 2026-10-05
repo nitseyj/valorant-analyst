@@ -58,7 +58,7 @@ function LineChart({ rounds, width = 600, height = 130 }) {
 
 export default function EconomyChart({ games, teamA, teamB }) {
   if (!games || games.length === 0) {
-    return <p className="text-xs text-ink-faint">· economy tracker — no round-level economy data loaded for this series</p>
+    return <p className="text-xs text-ink-faint">Economy tracker: no round-level economy data is loaded for this series.</p>
   }
   return (
     <Panel className="p-5">

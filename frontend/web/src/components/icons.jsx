@@ -4,8 +4,10 @@
 // reproducing Riot's actual level art or agent artwork — see MapIcon).
 
 function Svg({ size = 16, viewBox = '0 0 24 24', className, style, children, ...rest }) {
+  // Decorative by default. Icons that carry meaning pass their own aria-label.
+  const decorative = rest['aria-label'] ? {} : { 'aria-hidden': 'true' }
   return (
-    <svg width={size} height={size} viewBox={viewBox} className={className} style={style} {...rest}>
+    <svg width={size} height={size} viewBox={viewBox} className={className} style={style} {...decorative} {...rest}>
       {children}
     </svg>
   )

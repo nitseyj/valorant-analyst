@@ -12,7 +12,7 @@
   --color-line-soft: #1c1c22;
   --color-ink: #f2f1f4;
   --color-ink-dim: #a8a7b3;
-  --color-ink-faint: #66646f;
+  --color-ink-faint: #74727e;
 
   --color-brand: #ff3b56;
   --color-brand-dim: #ff3b5622;
@@ -21,6 +21,15 @@
   --color-team-b: #35d8c4;
   --color-team-b-dim: #35d8c422;
   --color-team-b-line: #35d8c455;
+
+  /* Status colours are deliberately NOT team-b teal: teal already means
+     "team B" everywhere, so reusing it for WIN would make the two read
+     as the same thing. */
+  --color-win: #3ddc97;
+  --color-win-dim: #3ddc9722;
+  --color-mvp: #f5c451;
+  --color-mvp-dim: #f5c45122;
+
 }
 
 @layer base {
@@ -35,6 +44,25 @@
   ::selection {
     background: var(--color-brand);
     color: #14060a;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+  button,
+  a,
+  [role='button'] {
+    touch-action: manipulation;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -63,11 +91,16 @@
   .fade-up {
     animation: fade-up 0.4s ease both;
   }
+  /* One shape system for the whole app: square edges with a clipped
+     corner. Panels use the larger cut, controls and tags the smaller. */
   .cut-corner {
     clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
   }
   .cut-corner-sm {
     clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px));
+  }
+  .cut-corner-tag {
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
   }
   .hexagon {
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
@@ -81,30 +114,21 @@
   .bg-grid {
     background-color: var(--color-bg);
     background-image:
-      /* dark dimming tint drawn ON TOP of the texture below (CSS paints
-         the first-listed background layer closest to the viewer) so the
-         generated art reads as a subtle accent, not a loud wallpaper —
-         text sitting directly on the page background (sidebar labels,
-         page margins) needs to stay legible everywhere, not just where
-         a panel's own opaque background covers it. */
+      /* A dark tint is listed first so it paints ON TOP of the texture
+         (CSS paints the first-listed layer closest to the viewer). That
+         keeps the art a quiet accent behind panels, not a wallpaper that
+         competes with the data. */
       linear-gradient(rgba(10, 10, 13, 0.66), rgba(10, 10, 13, 0.66)),
       url('/assets/ui/bg-texture.jpg'),
       linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
       linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-    /* background-attachment: fixed anchors the texture to the viewport
-       (not the full scrollable page height) so a tall page doesn't
-       stretch or re-tile it — same reasoning as the corner glows this
-       replaced. Sized with `cover` rather than tiled: the source image
-       isn't a seamless/edge-matched tile, so repeating it would show
-       visible seams; `cover` just crops it to fill instead. */
+    /* Fixed to the viewport and cropped with `cover`, not tiled: the
+       source texture is not edge-matched, so repeating it shows seams. */
     background-size: 100% 100%, cover, 56px 56px, 56px 56px;
     background-position: center, center, center, center;
     background-repeat: no-repeat, no-repeat, repeat, repeat;
     background-attachment: fixed, fixed, scroll, scroll;
   }
-  /* Small red dot cluster, same texture used in the corners of the
-     inspired UI kit's panels/sidebar. A background-image so it never
-     adds DOM nodes — apply to any element with real positioning. */
   .dot-texture {
     background-image: radial-gradient(rgba(255, 59, 86, 0.5) 1px, transparent 1.5px);
     background-size: 10px 10px;

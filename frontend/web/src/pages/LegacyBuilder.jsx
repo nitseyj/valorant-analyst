@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { searchPlayers, simulateRoster } from '../lib/api'
 import { ROLE_COLOR } from '../lib/roles'
 import { CrosshairDeco, DotsDeco, RoleGlyph, VersusIcon } from '../components/icons'
-import { Panel } from '../components/ui'
+import { Panel, Button } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
 import PlayerPortrait from '../components/PlayerPortrait'
 
@@ -44,7 +44,7 @@ function PlayerSlot({ slotKey, value, placeholder, accent, onChange, onSelect, o
         autoComplete="off"
         onChange={handleInput}
         onFocus={() => results.length > 0 && setOpenSlot(slotKey, results)}
-        className="w-full bg-panel-raised border border-line text-ink text-base rounded-sm py-3.5 px-4 font-mono focus:outline-none transition-colors"
+        className="w-full bg-panel-raised border border-line text-ink text-base rounded-sm py-3.5 px-4 font-mono transition-colors"
         style={{ borderColor: isOpen ? `${color}80` : undefined }}
       />
       {isOpen && results.length > 0 && (
@@ -114,7 +114,7 @@ function LineupResult({ lineup, accent, label }) {
     <Panel accent={color} className="p-6">
       <div className="font-mono text-sm font-semibold mb-4 flex items-baseline gap-2" style={{ color }}>
         {label}
-        <span className="text-xs text-ink-faint font-normal">AVG RATING {lineup.avg_rating ?? '—'}</span>
+        <span className="text-xs text-ink-faint font-normal">AVG RATING {lineup.avg_rating ?? '-'}</span>
       </div>
       {lineup.players.map((p) => (
         <div key={p.name} className="flex items-center gap-3.5 py-2.5 border-t border-line-soft first:border-t-0">
@@ -124,7 +124,7 @@ function LineupResult({ lineup, accent, label }) {
               {p.name}
               {p.low_sample && <span className="text-[10px] ml-1.5" style={{ color: 'var(--color-brand)' }}>low sample</span>}
             </div>
-            <div className="text-xs text-ink-faint truncate mt-0.5">{p.team || '—'}</div>
+            <div className="text-xs text-ink-faint truncate mt-0.5">{p.team || '-'}</div>
           </div>
           <span
             className="inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs shrink-0"
@@ -134,7 +134,7 @@ function LineupResult({ lineup, accent, label }) {
             {p.primary_agent || '?'}
           </span>
           <span className="font-mono text-sm w-11 text-right shrink-0 font-semibold" style={{ color }}>
-            {p.rating ?? '—'}
+            {p.rating ?? '-'}
           </span>
         </div>
       ))}
@@ -186,7 +186,7 @@ export default function LegacyBuilder() {
       const unreachable = e instanceof TypeError || e.name === 'TimeoutError' || e.name === 'AbortError'
       setStatus(
         unreachable
-          ? 'Backend not reachable — the roster builder needs a live connection (player combinations are too numerous to bundle as demo data). Start the API and try again.'
+          ? 'Backend not reachable. The roster builder needs a live connection, because player combinations are too numerous to bundle as demo data. Start the API and try again.'
           : `Backend error: ${e.message}`
       )
     }
@@ -207,8 +207,8 @@ export default function LegacyBuilder() {
         </div>
         <p className="relative text-sm text-ink-dim max-w-2xl leading-relaxed">
           Build two hypothetical 5-player lineups from any players in the loaded data and see a model
-          projection of the matchup. This is not a prediction of a real result — see the caveats below every
-          projection for exactly what is and isn't accounted for.
+          projection of the matchup. This is not a prediction of a real result. Each projection lists the
+          caveats below it, so you can see exactly what is and is not accounted for.
         </p>
       </Panel>
 
@@ -239,12 +239,9 @@ export default function LegacyBuilder() {
       </div>
 
       <div className="flex flex-col items-center gap-3 mb-8">
-        <button
-          onClick={onSimulate}
-          className="font-mono text-brand border border-brand-line bg-brand-dim px-8 py-3.5 text-base font-semibold rounded-sm hover:brightness-110 hover:scale-[1.02] transition-all"
-        >
+        <Button variant="primary" onClick={onSimulate} className="px-8 py-3.5 text-base">
           Simulate matchup
-        </button>
+        </Button>
         <div className="font-mono text-xs text-ink-faint min-h-[1.2em]">{status}</div>
       </div>
 

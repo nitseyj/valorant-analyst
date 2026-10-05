@@ -1,5 +1,5 @@
 export function formatEvidenceValue(metric, val) {
-  if (val === null || val === undefined) return '—'
+  if (val === null || val === undefined) return '-'
   if (typeof val === 'string') return val
   if (/Rate|%/.test(metric) && Math.abs(val) <= 1) return `${(val * 100).toFixed(0)}%`
   if (Number.isInteger(val)) return val
