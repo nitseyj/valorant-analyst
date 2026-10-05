@@ -26,7 +26,7 @@ function gridRing(n, cx, cy, radius, fraction) {
 }
 
 function formatAxisValue(axis) {
-  if (axis.value == null) return '—'
+  if (axis.value == null) return '-'
   return axis.is_percentage ? `${axis.value}%` : axis.value
 }
 
@@ -56,6 +56,18 @@ export default function RadarChart({ a, b, colorA = 'var(--color-brand)', colorB
   const cy = size / 2
   const radius = size / 2 - 46
   const hasAgentFlanks = Boolean(a.best_agent || (b && b.best_agent))
+  // A missing axis has no honest position. Drawing it at the centre would read
+  // as the lowest value in the loaded range, so an incomplete series is not drawn.
+  const aComplete = axes.every((x) => x.normalized != null)
+  const bComplete = Boolean(b && b.axes) && b.axes.every((x) => x.normalized != null)
+  const missing = [
+    ...(aComplete ? [] : axes.filter((x) => x.normalized == null).map((x) => `${a.name}: ${x.label}`)),
+    ...(b && !bComplete && b.axes ? b.axes.filter((x) => x.normalized == null).map((x) => `${b.name}: ${x.label}`) : []),
+  ]
+  const outside = [
+    ...axes.filter((x) => x.out_of_range).map((x) => `${a.name}: ${x.label}`),
+    ...(b && b.axes ? b.axes.filter((x) => x.out_of_range).map((x) => `${b.name}: ${x.label}`) : []),
+  ]
 
   return (
     <div className="flex flex-col items-center gap-5 w-full">
@@ -79,10 +91,10 @@ export default function RadarChart({ a, b, colorA = 'var(--color-brand)', colorB
               )
             })}
 
-            {b && b.axes && (
+            {bComplete && (
               <polygon points={polygonPoints(b.axes, cx, cy, radius)} fill={colorB} fillOpacity="0.16" stroke={colorB} strokeWidth="1.6" strokeLinejoin="round" />
             )}
-            <polygon points={polygonPoints(axes, cx, cy, radius)} fill={colorA} fillOpacity="0.18" stroke={colorA} strokeWidth="1.6" strokeLinejoin="round" />
+            {aComplete && <polygon points={polygonPoints(axes, cx, cy, radius)} fill={colorA} fillOpacity="0.18" stroke={colorA} strokeWidth="1.6" strokeLinejoin="round" />}
 
             {axes.map((axis, i) => {
               const angle = -Math.PI / 2 + i * ((2 * Math.PI) / n)
@@ -102,6 +114,12 @@ export default function RadarChart({ a, b, colorA = 'var(--color-brand)', colorB
               )
             })}
           </svg>
+          {(missing.length > 0 || outside.length > 0) && (
+            <div className="max-w-sm text-center text-xs text-ink-faint space-y-1">
+              {missing.length > 0 && <p>No data for {missing.join(', ')}, so that shape is not drawn.</p>}
+              {outside.length > 0 && <p>Outside the range of players with enough maps: {outside.join(', ')}.</p>}
+            </div>
+          )}
           {!hasAgentFlanks && (
             <div className="flex items-center gap-4 text-[11px] font-mono">
               <span style={{ color: colorA }}>■ {a.name}</span>

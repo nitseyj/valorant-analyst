@@ -35,3 +35,8 @@ dist/
 
 # Logs
 *.log
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# Claude Code runtime state (per-session locks, never commit)
+.claude/*.lock
