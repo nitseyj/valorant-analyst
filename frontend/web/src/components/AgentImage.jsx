@@ -6,7 +6,9 @@ import { roleOf, ROLE_COLOR } from '../lib/roles'
 // frontend/web/README.md) at public/assets/agents/<agent>.jpg. Falls back
 // to the role-colored RoleGlyph icon if a file is missing (e.g. an agent
 // added to the game after this asset pack was made).
-export default function AgentImage({ agent, className = '' }) {
+// `fit` is 'cover' (crops to fill, the default) or 'contain' (the whole
+// image, letterboxed inside the box).
+export default function AgentImage({ agent, className = '', fit = 'cover' }) {
   const [failed, setFailed] = useState(false)
   const [trackedAgent, setTrackedAgent] = useState(agent)
   if (agent !== trackedAgent) {
@@ -30,7 +32,7 @@ export default function AgentImage({ agent, className = '' }) {
       src={`/assets/agents/${agent.toLowerCase()}.jpg`}
       alt={agent}
       loading="lazy"
-      className={`object-cover ${className}`}
+      className={`${fit === 'contain' ? 'object-contain' : 'object-cover'} ${className}`}
       onError={() => setFailed(true)}
     />
   )

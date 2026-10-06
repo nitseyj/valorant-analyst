@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar'
+import CommandPalette from './components/CommandPalette'
 import Home from './pages/Home'
 import Teams from './pages/Teams'
 import TeamProfile from './pages/TeamProfile'
@@ -14,6 +15,20 @@ export default function App() {
   const [history, setHistory] = useState([])
   const [selectedTeamId, setSelectedTeamId] = useState(null)
   const [selectedMatchId, setSelectedMatchId] = useState(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
+  // Ctrl+K (or Cmd+K on Mac) opens the palette from anywhere. "/" is left to
+  // the Matches page, which uses it to focus its search box.
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Back walks the navigation history one step at a time, so Home > Team >
   // Match > Back lands on Team, and a second Back returns to Home.
@@ -47,7 +62,14 @@ export default function App() {
       </a>
       <Sidebar view={view} onNavigate={navigate} onBack={goBack} />
       <main id="main" tabIndex={-1} className="flex-1 min-w-0 px-5 py-7 md:px-10 md:py-9 max-w-[1360px] mx-auto w-full">
-        {view === 'home' && <Home onOpenMatch={openMatch} onOpenTeam={openTeam} />}
+        {view === 'home' && (
+          <Home
+            onOpenMatch={openMatch}
+            onOpenTeam={openTeam}
+            onNavigate={navigate}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
+        )}
         {view === 'teams' && <Teams onOpenTeam={openTeam} />}
         {view === 'team' && <TeamProfile teamId={selectedTeamId} onOpenMatch={openMatch} />}
         {view === 'matches' && <Matches onOpenMatch={openMatch} />}
@@ -56,6 +78,14 @@ export default function App() {
         {view === 'analytics' && <Analytics />}
         {view === 'legacy' && <LegacyBuilder />}
       </main>
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          onNavigate={navigate}
+          onOpenTeam={openTeam}
+          onOpenMatch={openMatch}
+        />
+      )}
     </div>
   )
 }

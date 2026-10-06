@@ -71,6 +71,26 @@ export async function getTimeline(id) {
   }
 }
 
+// Every map played in a series, with its game id, for the map picker.
+// Returns null when the backend is unreachable, rather than inventing maps.
+export async function getMatchGames(matchId) {
+  try {
+    return await getJSON(`/matches/${matchId}`, { timeout: 4000 })
+  } catch {
+    return null
+  }
+}
+
+// Each team's players on one map and the agent each played. No demo fallback:
+// this data only exists in the live database, so offline the panel says so.
+export async function getGameLineups(gameId) {
+  try {
+    return await getJSON(`/games/${gameId}/lineups`, { timeout: 6000 })
+  } catch {
+    return null
+  }
+}
+
 export async function listTeams({ q, tier } = {}) {
   try {
     const params = new URLSearchParams()

@@ -200,3 +200,27 @@
     background-size: 10px 10px;
   }
 }
+
+/* Latest-series ticker. Pauses while hovered or focused, and fades at both
+   edges so items slide in and out instead of cutting off. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  /* The ticker runs by design, so these override the global reduced-motion
+     rule. A visible Pause control on the page is the accessible alternative. */
+  animation: marquee 70s linear infinite !important;
+  animation-play-state: running !important;
+}
+.marquee.is-paused .marquee-track,
+.marquee:hover .marquee-track,
+.marquee:focus-within .marquee-track {
+  animation-play-state: paused !important;
+}

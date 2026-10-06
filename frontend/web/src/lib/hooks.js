@@ -25,3 +25,19 @@ export function useCountUp(target, duration = 1000) {
   }, [target, duration])
   return value
 }
+
+// "/" moves focus to a search box from anywhere on the page, unless the user
+// is already typing somewhere.
+export function useSlashToFocus(ref) {
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
+      e.preventDefault()
+      ref.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [ref])
+}
