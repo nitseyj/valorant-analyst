@@ -1,27 +1,38 @@
 import { useEffect, useRef, useState } from 'react'
 import { searchPlayers, simulateRoster } from '../lib/api'
-import { ROLE_COLOR } from '../lib/roles'
+import { ROLE_COLOR, roleOf } from '../lib/roles'
 import { useCountUp } from '../lib/hooks'
 import { CrosshairDeco, DotsDeco, RoleGlyph, VersusIcon } from '../components/icons'
 import { Panel, Button, Label, SectionHeader } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
 import PlayerPortrait from '../components/PlayerPortrait'
+import AgentImage from '../components/AgentImage'
 
 const DEFAULTS_A = ['aspas', 'Jinggg', 'f0rsakeN', 'Chronicle', 'Boaster']
 const DEFAULTS_B = ['zekken', 'Derke', 'yay', 'johnqt', 'Sayf']
 const EMPTY = ['', '', '', '', '']
+const ROLES = ['Duelist', 'Initiator', 'Controller', 'Sentinel']
+const HISTORY_LIMIT = 20
 
 function accentColor(accent) {
   return accent === 'brand' ? 'var(--color-brand)' : 'var(--color-team-b)'
 }
 
+// The whole agent image, never cropped: the art at its true proportions with a
+// blurred copy filling the frame around it.
+function FramedAgent({ agent, className = '' }) {
+  if (!agent) return null
+  return (
+    <div className={`relative overflow-hidden bg-panel-raised ${className}`}>
+      <AgentImage agent={agent} className="absolute inset-0 w-full h-full scale-110 blur-xl opacity-40" />
+      <AgentImage agent={agent} fit="contain" className="absolute inset-0 w-full h-full" />
+    </div>
+  )
+}
+
 // Each slot debounces its OWN search independently (a ref map keyed by
-// "prefix-index", not one shared timer) — a single shared timer would
-// cancel slot 1's pending search the instant the user tabs to slot 2 and
-// types there, which is the normal workflow when filling 5 lineup slots in
-// a row. Only one dropdown is ever shown open at a time (via `openSlot` in
-// the parent) since the dropdown floats over whatever's below it and two
-// open at once would visually overlap.
+// "prefix-index", not one shared timer), so typing in one slot never cancels
+// a search pending in another. Only one dropdown is open at a time.
 //
 // The dropdown is a listbox: arrow keys move through matches, Enter picks
 // the highlighted one, and Escape closes it without losing the typed text.
@@ -70,34 +81,44 @@ function PlayerSlot({ slotKey, value, placeholder, accent, onChange, onSelect, o
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setActive(Math.max(activeIndex - 1, 0))
-    } else if (e.key === 'Enter' && activeIndex >= 0) {
-      e.preventDefault()
-      choose(results[activeIndex])
+    } else if (e.key === 'Enter') {
+      // With nothing highlighted, Enter only picks a name typed exactly, so a
+      // partial search never picks a different player by accident.
+      const exact = results.find((p) => p.name.toLowerCase() === value.trim().toLowerCase())
+      const target = activeIndex >= 0 ? results[activeIndex] : exact
+      if (target) {
+        e.preventDefault()
+        choose(target)
+      }
     }
   }
 
   return (
     <div className="relative">
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        autoComplete="off"
-        role="combobox"
-        aria-expanded={isOpen}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        aria-activedescendant={activeIndex >= 0 ? `${slotKey}-opt-${activeIndex}` : undefined}
-        aria-label={`${accent === 'brand' ? 'Lineup A' : 'Lineup B'} player, ${placeholder}`}
-        onChange={handleInput}
-        onKeyDown={handleKeyDown}
-        onFocus={() => results.length > 0 && setOpenSlot(slotKey, results)}
-        className="w-full bg-panel-raised border border-line text-ink text-base rounded-sm py-3.5 px-4 font-mono transition-colors focus-visible:border-brand"
-        style={{ borderColor: isOpen ? `color-mix(in srgb, ${color} 50%, transparent)` : undefined }}
-      />
+      <div className="flex items-stretch gap-3">
+        <input
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={activeIndex >= 0 ? `${slotKey}-opt-${activeIndex}` : undefined}
+          aria-label={`${accent === 'brand' ? 'Lineup A' : 'Lineup B'} player, ${placeholder}`}
+          onChange={handleInput}
+          onKeyDown={handleKeyDown}
+          onFocus={() => results.length > 0 && setOpenSlot(slotKey, results)}
+          className="min-w-0 flex-1 bg-panel-raised border border-line text-ink text-base rounded-sm py-3.5 px-4 font-mono transition-colors focus-visible:border-brand"
+          style={{ borderColor: isOpen ? `color-mix(in srgb, ${color} 50%, transparent)` : undefined }}
+        />
+        {picked?.best_agent && !isOpen && (
+          <FramedAgent agent={picked.best_agent} className="w-11 shrink-0 cut-corner-tag border border-line rise-in" />
+        )}
+      </div>
       {picked && !isOpen && (
         <div className="rise-in flex items-center gap-2 mt-1.5 text-xs text-ink-faint min-w-0" aria-hidden="true">
-          <PlayerPortrait agent={picked.best_agent} color={color} size={22} />
           <span className="truncate">{picked.team || 'Unknown team'}</span>
           {picked.best_agent && <span className="font-mono capitalize shrink-0">{picked.best_agent}</span>}
         </div>
@@ -138,8 +159,42 @@ function PlayerSlot({ slotKey, value, placeholder, accent, onChange, onSelect, o
   )
 }
 
-function LineupColumn({ label, accent, names, setNames, placeholders, openSlot, setOpenSlot, results, known, remember }) {
+// How many of the four roles a lineup fills. Before a simulation this comes
+// from each player's best agent; after one, from the model's primary roles.
+function RoleCoverage({ counts, color }) {
+  return (
+    <div className="grid grid-cols-4 gap-2 mb-5" role="list" aria-label="Role coverage">
+      {ROLES.map((role) => {
+        const n = counts[role] || 0
+        const roleColor = ROLE_COLOR[role]
+        return (
+          <div
+            key={role}
+            role="listitem"
+            className={`rise-in flex flex-col items-center gap-1 py-2 border cut-corner-tag ${n ? '' : 'border-dashed border-line'}`}
+            style={n ? { borderColor: `color-mix(in srgb, ${roleColor} 45%, transparent)`, background: `color-mix(in srgb, ${roleColor} 10%, transparent)` } : undefined}
+          >
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] truncate max-w-full" style={{ color: n ? roleColor : 'var(--color-ink-faint)' }}>
+              {role}
+            </span>
+            <span className="font-display text-lg font-bold tabular-nums" style={{ color: n ? color : 'var(--color-ink-faint)' }}>{n}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function countRoles(roles) {
+  return roles.reduce((acc, r) => {
+    if (r) acc[r] = (acc[r] || 0) + 1
+    return acc
+  }, {})
+}
+
+function LineupColumn({ label, accent, side, names, setNames, onPick, placeholders, openSlot, setOpenSlot, results, known, remember }) {
   const color = accentColor(accent)
+  const roles = names.map((n) => (known[n]?.best_agent ? roleOf(known[n].best_agent) : null))
   return (
     <Panel accent={color} className="p-6 relative overflow-hidden">
       <svg className="absolute -right-8 -top-10 opacity-[0.06] pointer-events-none" width="180" height="180" viewBox="0 0 180 180" aria-hidden="true">
@@ -149,9 +204,10 @@ function LineupColumn({ label, accent, names, setNames, placeholders, openSlot, 
       <div className="relative flex items-center gap-2 font-mono text-sm font-semibold mb-4 tracking-wide" style={{ color }}>
         <span className="w-2 h-2 rounded-full" style={{ background: color }} />
         {label}
-        <span className="ml-auto font-normal text-xs text-ink-faint tabular-nums">
-          {names.filter((n) => n.trim()).length}/5
-        </span>
+        <span className="ml-auto font-normal text-xs text-ink-faint tabular-nums">{names.filter((n) => n.trim()).length}/5</span>
+      </div>
+      <div className="relative mb-5">
+        <RoleCoverage counts={countRoles(roles)} color={color} />
       </div>
       <div className="relative flex flex-col gap-3">
         {names.map((val, i) => {
@@ -163,10 +219,10 @@ function LineupColumn({ label, accent, names, setNames, placeholders, openSlot, 
               value={val}
               placeholder={placeholders[i]}
               accent={accent}
-              onChange={(v) => setNames((prev) => prev.map((n, idx) => (idx === i ? v : n)))}
+              onChange={(v) => setNames(i, v)}
               onSelect={(p) => {
                 remember(p)
-                setNames((prev) => prev.map((n, idx) => (idx === i ? p.name : n)))
+                onPick(side, i, p.name)
               }}
               openSlot={openSlot}
               setOpenSlot={setOpenSlot}
@@ -186,17 +242,19 @@ function ProbabilityBar({ a, b }) {
   const pa = useCountUp(a * 100, 1000)
   const pb = useCountUp(b * 100, 1000)
   return (
-    <div className="h-11 rounded-sm flex overflow-hidden" role="img" aria-label={`Lineup A ${(a * 100).toFixed(0)} percent, Lineup B ${(b * 100).toFixed(0)} percent`}>
-      <div className="flex items-center justify-center font-mono text-sm font-bold" style={{ width: `${pa}%`, background: 'var(--color-brand)', color: '#1a1108' }}>
+    <div className="h-14 rounded-sm flex overflow-hidden" role="img" aria-label={`Lineup A ${(a * 100).toFixed(0)} percent, Lineup B ${(b * 100).toFixed(0)} percent`}>
+      <div className="flex items-center justify-center font-mono text-base font-bold" style={{ width: `${pa}%`, background: 'var(--color-brand)', color: '#1a1108' }}>
         {Math.round(pa)}%
       </div>
-      <div className="flex items-center justify-center font-mono text-sm font-bold" style={{ width: `${pb}%`, background: 'var(--color-team-b)', color: '#062024' }}>
+      <div className="flex items-center justify-center font-mono text-base font-bold" style={{ width: `${pb}%`, background: 'var(--color-team-b)', color: '#062024' }}>
         {Math.round(pb)}%
       </div>
     </div>
   )
 }
 
+// Each player as a framed agent card. The art is shown whole, and the name,
+// role and rating sit over a dark fade at the bottom.
 function LineupResult({ lineup, accent, label }) {
   const color = accentColor(accent)
   return (
@@ -205,31 +263,36 @@ function LineupResult({ lineup, accent, label }) {
         {label}
         <span className="text-xs text-ink-faint font-normal">AVG RATING {lineup.avg_rating ?? '-'}</span>
       </div>
-      {lineup.players.map((p, i) => (
-        <div key={p.name} className="rise-in flex items-center gap-3.5 py-2.5 border-t border-line-soft first:border-t-0" style={{ animationDelay: `${i * 60}ms` }}>
-          <PlayerPortrait agent={p.best_agent} color={color} size={50} />
-          <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-semibold truncate">
-              {p.name}
-              {p.low_sample && <span className="text-[10px] ml-1.5" style={{ color: 'var(--color-brand)' }}>low sample</span>}
-            </div>
-            <div className="text-xs text-ink-faint truncate mt-0.5">{p.team || '-'}</div>
-          </div>
-          <span
-            className="inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-xs shrink-0"
-            style={{ color: ROLE_COLOR[p.primary_role] || 'var(--color-ink-faint)', borderColor: `${ROLE_COLOR[p.primary_role] || 'var(--color-ink-faint)'}33` }}
-          >
-            <RoleGlyph role={p.primary_role} style={{ color: ROLE_COLOR[p.primary_role] || 'var(--color-ink-faint)' }} />
-            {p.primary_agent || '?'}
-          </span>
-          <span className="font-mono text-sm w-11 text-right shrink-0 font-semibold" style={{ color }}>
-            {p.rating ?? '-'}
-          </span>
-        </div>
-      ))}
-      {lineup.missing_roles.length > 0 && (
-        <div className="text-xs text-ink-faint mt-3">No dedicated {lineup.missing_roles.join('/')}</div>
-      )}
+      <RoleCoverage counts={countRoles(lineup.players.map((p) => p.primary_role))} color={color} />
+      <ol className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {lineup.players.map((p, i) => {
+          const roleColor = ROLE_COLOR[p.primary_role] || 'var(--color-ink-faint)'
+          return (
+            <li key={p.name} className="rise-in relative aspect-[3/4] overflow-hidden cut-corner-tag border border-line bg-panel-raised" style={{ animationDelay: `${i * 70}ms` }}>
+              {p.best_agent ? (
+                <>
+                  <AgentImage agent={p.best_agent} className="absolute inset-0 w-full h-full scale-110 blur-xl opacity-40" />
+                  <AgentImage agent={p.best_agent} fit="contain" className="absolute inset-0 w-full h-full" />
+                </>
+              ) : null}
+              <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(to top, rgba(10,10,13,0.95) 0%, rgba(10,10,13,0.2) 45%, transparent)' }} aria-hidden="true" />
+              <span className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: color }} aria-hidden="true" />
+              <div className="absolute inset-x-0 bottom-0 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-display text-sm font-semibold truncate">{p.name}</span>
+                  <span className="font-mono text-xs font-semibold tabular-nums shrink-0" style={{ color }}>{p.rating ?? '-'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-mono" style={{ color: roleColor }}>
+                  <RoleGlyph role={p.primary_role} style={{ color: roleColor }} />
+                  <span className="truncate capitalize">{p.primary_agent || p.best_agent || '?'}</span>
+                  {p.low_sample && <span className="ml-auto shrink-0 text-[10px] uppercase" style={{ color: 'var(--color-brand)' }}>low sample</span>}
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+      {lineup.missing_roles.length > 0 && <div className="text-xs text-ink-faint mt-3">No dedicated {lineup.missing_roles.join('/')}</div>}
     </Panel>
   )
 }
@@ -271,8 +334,9 @@ function RatingProfile({ resultA, resultB }) {
 }
 
 export default function LegacyBuilder() {
-  const [namesA, setNamesA] = useState(EMPTY)
-  const [namesB, setNamesB] = useState(EMPTY)
+  // Both lineups and their undo history live in one state object, so a pick,
+  // a swap or a sample is one step that can be undone.
+  const [board, setBoard] = useState({ a: EMPTY, b: EMPTY, past: [] })
   const [openSlot, setOpenSlotKey] = useState(null)
   const [results, setResults] = useState([])
   const [known, setKnown] = useState({})
@@ -282,6 +346,37 @@ export default function LegacyBuilder() {
   function setOpenSlot(key, list = []) {
     setOpenSlotKey(key)
     setResults(list)
+  }
+
+  // Typing edits a slot without an undo step, so each keystroke is not a
+  // separate entry in the history.
+  function setName(side, index, value) {
+    setBoard((prev) => ({ ...prev, [side]: prev[side].map((n, i) => (i === index ? value : n)) }))
+  }
+
+  // A pick, sample, clear or swap is one undoable step.
+  function commit(next) {
+    setBoard((prev) => ({
+      a: next.a ?? prev.a,
+      b: next.b ?? prev.b,
+      past: [...prev.past.slice(-(HISTORY_LIMIT - 1)), { a: prev.a, b: prev.b }],
+    }))
+  }
+
+  function pick(side, index, name) {
+    setBoard((prev) => ({
+      ...prev,
+      [side]: prev[side].map((n, i) => (i === index ? name : n)),
+      past: [...prev.past.slice(-(HISTORY_LIMIT - 1)), { a: prev.a, b: prev.b }],
+    }))
+  }
+
+  function undo() {
+    setBoard((prev) => {
+      const last = prev.past[prev.past.length - 1]
+      if (!last) return prev
+      return { a: last.a, b: last.b, past: prev.past.slice(0, -1) }
+    })
   }
 
   // Remember what a picked player looks like, so the slot can keep showing
@@ -299,14 +394,22 @@ export default function LegacyBuilder() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
 
-  function swapSides() {
-    setNamesA(namesB)
-    setNamesB(namesA)
-  }
+  // Ctrl+Z undoes the last lineup change, unless the user is typing in a slot.
+  useEffect(() => {
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   async function onSimulate() {
-    const resolvedA = namesA.map((v, i) => (v.trim() ? v.trim() : DEFAULTS_A[i]))
-    const resolvedB = namesB.map((v, i) => (v.trim() ? v.trim() : DEFAULTS_B[i]))
+    const resolvedA = board.a.map((v, i) => (v.trim() ? v.trim() : DEFAULTS_A[i]))
+    const resolvedB = board.b.map((v, i) => (v.trim() ? v.trim() : DEFAULTS_B[i]))
     setStatus('simulating…')
     setResult(null)
     try {
@@ -338,25 +441,30 @@ export default function LegacyBuilder() {
           <circle cx="130" cy="130" r="40" stroke="var(--color-brand)" strokeWidth="1" fill="none" />
         </svg>
         <DotsDeco className="absolute left-6 bottom-5 text-ink-faint opacity-30 pointer-events-none" />
-        <div className="relative flex items-center gap-3 font-display text-2xl sm:text-3xl font-bold mb-3">
+        <Label tone="brand" className="relative mb-3">Legacy builder</Label>
+        <h1 className="relative flex items-center gap-3 font-display text-3xl md:text-4xl font-bold mb-3">
           Legacy Roster Builder
           <CrosshairDeco size={32} className="text-team-b opacity-50" />
-        </div>
+        </h1>
         <p className="relative text-sm text-ink-dim max-w-2xl leading-relaxed">
-          Build two hypothetical 5-player lineups from any players in the loaded data and see a model
-          projection of the matchup. This is not a prediction of a real result. Each projection lists the
-          caveats below it, so you can see exactly what is and is not accounted for.
+          Build two hypothetical 5-player lineups from any players in the loaded data and see a model projection of the
+          matchup. This is not a prediction of a real result. Each projection lists the caveats below it, so you can see
+          exactly what is and is not accounted for.
         </p>
         <div className="relative flex flex-wrap gap-2 mt-5">
-          <Button variant="secondary" className="min-h-[40px] text-xs" onClick={() => { setNamesA(DEFAULTS_A); setNamesB(DEFAULTS_B) }}>
+          <Button variant="secondary" className="min-h-[40px] text-xs" onClick={() => commit({ a: DEFAULTS_A, b: DEFAULTS_B })}>
             Load sample lineups
           </Button>
-          <Button variant="ghost" className="min-h-[40px] text-xs" onClick={() => { setNamesA(EMPTY); setNamesB(EMPTY) }}>
+          <Button variant="ghost" className="min-h-[40px] text-xs" onClick={() => commit({ a: EMPTY, b: EMPTY })}>
             Clear both
           </Button>
-          <Button variant="ghost" className="min-h-[40px] text-xs" onClick={swapSides}>
+          <Button variant="ghost" className="min-h-[40px] text-xs" onClick={() => commit({ a: board.b, b: board.a })}>
             Swap sides
           </Button>
+          <Button variant="ghost" className="min-h-[40px] text-xs" onClick={undo} disabled={board.past.length === 0}>
+            Undo{board.past.length ? ` (${board.past.length})` : ''}
+          </Button>
+          <span className="hidden sm:inline-flex items-center font-mono text-[11px] text-ink-faint ml-auto">Ctrl Z to undo</span>
         </div>
       </Panel>
 
@@ -364,8 +472,10 @@ export default function LegacyBuilder() {
         <LineupColumn
           label="LINEUP A"
           accent="brand"
-          names={namesA}
-          setNames={setNamesA}
+          side="a"
+          names={board.a}
+          setNames={(i, v) => setName('a', i, v)}
+          onPick={pick}
           placeholders={DEFAULTS_A}
           openSlot={openSlot}
           setOpenSlot={setOpenSlot}
@@ -376,8 +486,10 @@ export default function LegacyBuilder() {
         <LineupColumn
           label="LINEUP B"
           accent="team-b"
-          names={namesB}
-          setNames={setNamesB}
+          side="b"
+          names={board.b}
+          setNames={(i, v) => setName('b', i, v)}
+          onPick={pick}
           placeholders={DEFAULTS_B}
           openSlot={openSlot}
           setOpenSlot={setOpenSlot}

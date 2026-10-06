@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listMatches, getMatchVerdict } from '../lib/api'
 import { impactColor, matchScoreStr } from '../lib/format'
-import { useCountUp } from '../lib/hooks'
+import { useCountUp, useSlashToFocus } from '../lib/hooks'
 import { SearchIcon, ChevronRightIcon, CategoryIcon } from '../components/icons'
 import { Label, EmptyState, Skeleton, Tag, Button, ImpactBar } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -13,6 +13,15 @@ const SORTS = [
   { key: 'closest', label: 'Closest finish' },
   { key: 'biggest', label: 'Biggest margin' },
   { key: 'az', label: 'Team A to Z' },
+]
+const OUTCOMES = [
+  { key: null, label: 'All series' },
+  { key: 'sweep', label: 'Sweeps' },
+  { key: 'close', label: 'Close series' },
+]
+const VIEWS = [
+  { key: 'list', label: 'List' },
+  { key: 'event', label: 'By event' },
 ]
 const PAGE_SIZE = 50
 const UNKNOWN_MARGIN = 999
@@ -29,6 +38,17 @@ function marginOf(m) {
   return parsed ? Math.abs(parsed[0] - parsed[1]) : UNKNOWN_MARGIN
 }
 
+// A sweep is one side winning every map played. A close series is decided by
+// one map with at least three played (2-1 and up). Anything else is standard.
+function outcomeOf(m) {
+  const parsed = parseScore(matchScoreStr(m))
+  if (!parsed) return null
+  const [a, b] = parsed
+  if (Math.min(a, b) === 0) return 'sweep'
+  if (Math.abs(a - b) === 1 && a + b >= 3) return 'close'
+  return 'standard'
+}
+
 // Maps won by each side as a proportional split bar.
 function ScoreBar({ scoreStr, delay }) {
   const parsed = parseScore(scoreStr)
@@ -42,6 +62,12 @@ function ScoreBar({ scoreStr, delay }) {
       <div className="h-full bg-team-b" style={{ width: `${100 - aShare}%` }} />
     </div>
   )
+}
+
+function OutcomeTag({ outcome }) {
+  if (outcome === 'sweep') return <Tag tone="brand">Sweep</Tag>
+  if (outcome === 'close') return <Tag tone="mvp">Close</Tag>
+  return null
 }
 
 function TeamRow({ name, won, lost, accent }) {
@@ -101,6 +127,7 @@ function MatchCard({ m, delay, onOpen, open, onTogglePeek, factors }) {
   const aWon = m.winner === m.team_a
   const bWon = m.winner === m.team_b
   const panelId = `peek-${m.match_id}`
+  const outcome = outcomeOf(m)
 
   // The spotlight follows the pointer through CSS variables rather than React
   // state, so moving the mouse never re-renders the list.
@@ -153,8 +180,11 @@ function MatchCard({ m, delay, onOpen, open, onTogglePeek, factors }) {
             {parsed && <ScoreBar scoreStr={scoreStr} delay={delay + 120} />}
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            {m.year && <Tag tone="neutral" className="hidden md:inline-flex">{m.year}</Tag>}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="hidden md:inline-flex"><OutcomeTag outcome={outcome} /></span>
+              {m.year && <Tag tone="neutral" className="hidden md:inline-flex">{m.year}</Tag>}
+            </div>
             <ChevronRightIcon size={16} className="text-ink-faint group-hover:text-brand transition-colors" />
           </div>
         </div>
@@ -179,10 +209,49 @@ function MatchCard({ m, delay, onOpen, open, onTogglePeek, factors }) {
   )
 }
 
+// Four numbers about the loaded series, with the sweep share drawn as a bar.
+// They describe what was loaded, not the filtered view.
+function SeriesProfile({ matches }) {
+  const scored = matches.map((m) => ({ m, parsed: parseScore(matchScoreStr(m)) })).filter((x) => x.parsed)
+  const n = scored.length || 1
+  const sweeps = scored.filter((x) => outcomeOf(x.m) === 'sweep').length
+  const close = scored.filter((x) => outcomeOf(x.m) === 'close').length
+  const avgMaps = scored.reduce((sum, x) => sum + x.parsed[0] + x.parsed[1], 0) / n
+  const sweepShare = (sweeps / n) * 100
+  const closeShare = (close / n) * 100
+  const loaded = useCountUp(matches.length, 900)
+
+  const cells = [
+    { label: 'Series loaded', value: Math.round(loaded).toLocaleString(), sub: 'in this view' },
+    { label: 'Sweeps', value: `${sweepShare.toFixed(0)}%`, sub: `${sweeps} series, one side took every map`, bar: sweepShare, color: 'var(--color-brand)' },
+    { label: 'Close series', value: `${closeShare.toFixed(0)}%`, sub: `${close} series decided by one map`, bar: closeShare, color: 'var(--color-mvp)' },
+    { label: 'Maps per series', value: avgMaps.toFixed(1), sub: 'average, both sides combined' },
+  ]
+
+  return (
+    <dl className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      {cells.map((c, i) => (
+        <div key={c.label} className="rise-in cut-corner-sm bg-panel border border-line p-4" style={{ animationDelay: `${i * 70}ms` }}>
+          <dt><Label>{c.label}</Label></dt>
+          <dd className="font-display text-2xl font-bold tabular-nums mt-2">{c.value}</dd>
+          {c.bar != null && (
+            <div className="h-1 bg-line-soft mt-2.5 overflow-hidden" aria-hidden="true">
+              <div className="grow-x h-full" style={{ width: `${c.bar}%`, background: c.color }} />
+            </div>
+          )}
+          <div className="text-[11px] text-ink-faint mt-2 leading-snug">{c.sub}</div>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 export default function Matches({ onOpenMatch }) {
   const [query, setQuery] = useState('')
   const [year, setYear] = useState(null)
   const [sort, setSort] = useState('listed')
+  const [outcome, setOutcome] = useState(null)
+  const [view, setView] = useState('list')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [matches, setMatches] = useState(null)
   const [total, setTotal] = useState(null)
@@ -217,20 +286,9 @@ export default function Matches({ onOpenMatch }) {
     }
   }, [query, year, limit])
 
-  // "/" jumps to search from anywhere on the page, unless the user is typing.
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
-      const tag = e.target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return
-      e.preventDefault()
-      searchRef.current?.focus()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  useSlashToFocus(searchRef)
 
-  // Up and down arrows move focus between match cards.
+  // Up and down arrows move focus between match cards, across event groups too.
   function onListKeyDown(e) {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     const buttons = [...(listRef.current?.querySelectorAll('[data-match-open]') ?? [])]
@@ -262,7 +320,7 @@ export default function Matches({ onOpenMatch }) {
     setPeekData((prev) => ({ ...prev, [id]: factors }))
   }
 
-  const shown = useMemo(() => {
+  const sorted = useMemo(() => {
     if (!matches) return null
     const list = [...matches]
     if (sort === 'closest') list.sort((a, b) => marginOf(a) - marginOf(b))
@@ -271,46 +329,73 @@ export default function Matches({ onOpenMatch }) {
     return list
   }, [matches, sort])
 
+  const shown = useMemo(() => (sorted && outcome ? sorted.filter((m) => outcomeOf(m) === outcome) : sorted), [sorted, outcome])
+
+  // Groups keep the order their first match appeared in, so the event order
+  // from the list is preserved.
+  const groups = useMemo(() => {
+    if (!shown) return []
+    const map = new Map()
+    for (const m of shown) {
+      const key = m.tournament || 'Unknown event'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(m)
+    }
+    return [...map.entries()]
+  }, [shown])
+
   const headline = total ?? matches?.length ?? null
   const animatedCount = useCountUp(headline, 1000)
   const canShowMore = matches && total != null && total > matches.length
   const chips = [
     ...(query ? [{ id: 'team', label: `Team: ${query}`, clear: () => updateQuery('') }] : []),
     ...(year ? [{ id: 'year', label: `Season: ${year}`, clear: () => updateYear(null) }] : []),
+    ...(outcome ? [{ id: 'outcome', label: OUTCOMES.find((o) => o.key === outcome).label, clear: () => setOutcome(null) }] : []),
   ]
+
+  function renderCard(m, i) {
+    return (
+      <MatchCard
+        key={m.match_id}
+        m={m}
+        delay={Math.min(i * 30, 600)}
+        onOpen={() => onOpenMatch(m.match_id)}
+        open={Boolean(openPeeks[m.match_id])}
+        onTogglePeek={() => togglePeek(m.match_id)}
+        factors={peekData[m.match_id]}
+      />
+    )
+  }
 
   return (
     <div className="fade-up">
       <section className="relative overflow-hidden cut-corner border border-line bg-panel px-6 md:px-9 py-8 mb-6">
         <span className="absolute left-0 top-0 bottom-0 w-1 bg-brand" aria-hidden="true" />
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-          <div className="min-w-0">
+          <div className="min-w-0 max-w-2xl">
             <Label tone="brand" className="mb-3">Matches</Label>
             <h1 className="font-display text-3xl md:text-4xl font-bold">All matches</h1>
-            <p className="text-sm text-ink-dim mt-3 max-w-2xl leading-relaxed">
-              Search by team, or narrow by season. Peek at the top factors or open any match for its ranked verdict and round evidence.
+            <p className="text-sm text-ink-dim mt-3 leading-relaxed">
+              Search by team, or narrow by season and outcome. Group matches by event, peek at the top factors, or open any
+              match for its ranked verdict and round evidence.
             </p>
           </div>
           <dl className="flex items-end gap-8 shrink-0">
             <div>
-              <dt><Label>Matches</Label></dt>
+              <dt><Label>All matches</Label></dt>
               <dd className="font-display text-4xl font-bold tabular-nums mt-2" aria-live="polite">
                 {headline == null ? '…' : Math.round(animatedCount).toLocaleString()}
               </dd>
             </div>
             <div className="pb-1">
               <dt className="sr-only">Data source</dt>
-              <dd>
-                {live === null ? null : live ? (
-                  <Tag tone="brand">Live backend</Tag>
-                ) : (
-                  <Tag tone="neutral">Bundled data</Tag>
-                )}
-              </dd>
+              <dd>{live === null ? null : live ? <Tag tone="brand">Live backend</Tag> : <Tag tone="neutral">Bundled data</Tag>}</dd>
             </div>
           </dl>
         </div>
       </section>
+
+      {matches && matches.length > 0 && <SeriesProfile matches={matches} />}
 
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-3">
         <div className="relative flex-1 max-w-xl">
@@ -330,12 +415,7 @@ export default function Matches({ onOpenMatch }) {
           </label>
           <kbd className="absolute right-12 top-1/2 -translate-y-1/2 hidden md:inline-flex font-mono text-[11px] text-ink-faint border border-line px-1.5 py-0.5 pointer-events-none" aria-hidden="true">/</kbd>
           {query && (
-            <button
-              type="button"
-              onClick={() => updateQuery('')}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 font-mono text-ink-faint hover:text-brand"
-            >
+            <button type="button" onClick={() => updateQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 font-mono text-ink-faint hover:text-brand">
               ×
             </button>
           )}
@@ -357,6 +437,56 @@ export default function Matches({ onOpenMatch }) {
         </div>
       </div>
 
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+        <div role="group" aria-label="Filter by outcome" className="flex flex-wrap gap-1 p-1 bg-panel border border-line cut-corner-tag self-start">
+          {OUTCOMES.map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              aria-pressed={outcome === o.key}
+              onClick={() => setOutcome(o.key)}
+              className={`min-h-[36px] px-3 font-mono text-[11px] cut-corner-tag transition-colors ${
+                outcome === o.key ? 'bg-panel-raised text-brand border border-brand-line' : 'text-ink-dim hover:text-ink border border-transparent'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <div role="group" aria-label="Choose view" className="flex gap-1 p-1 bg-panel border border-line cut-corner-tag">
+            {VIEWS.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                aria-pressed={view === v.key}
+                onClick={() => setView(v.key)}
+                className={`min-h-[36px] px-3 font-mono text-[11px] cut-corner-tag transition-colors ${
+                  view === v.key ? 'bg-brand text-[#14060a] font-semibold' : 'text-ink-dim hover:text-ink'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <div role="group" aria-label="Sort loaded matches" className="flex flex-wrap gap-1 p-1 bg-panel border border-line cut-corner-tag">
+            {SORTS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                aria-pressed={sort === s.key}
+                onClick={() => setSort(s.key)}
+                className={`min-h-[36px] px-3 py-1.5 font-mono text-[11px] cut-corner-tag transition-colors ${
+                  sort === s.key ? 'bg-panel-raised text-brand border border-brand-line' : 'text-ink-dim hover:text-ink border border-transparent'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4" aria-label="Active filters">
           {chips.map((c) => (
@@ -372,55 +502,64 @@ export default function Matches({ onOpenMatch }) {
             </button>
           ))}
           {chips.length > 1 && (
-            <Button variant="ghost" className="min-h-[36px] px-2 py-1 text-xs" onClick={() => { updateQuery(''); updateYear(null) }}>
+            <Button
+              variant="ghost"
+              className="min-h-[36px] px-2 py-1 text-xs"
+              onClick={() => {
+                updateQuery('')
+                updateYear(null)
+                setOutcome(null)
+              }}
+            >
               Clear all
             </Button>
           )}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <Label aria-live="polite">{status}</Label>
-        <div role="group" aria-label="Sort loaded matches" className="flex flex-wrap gap-1 p-1 bg-panel border border-line cut-corner-tag self-start sm:self-auto">
-          {SORTS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              aria-pressed={sort === s.key}
-              onClick={() => setSort(s.key)}
-              className={`min-h-[36px] px-3 py-1.5 font-mono text-[11px] cut-corner-tag transition-colors ${
-                sort === s.key ? 'bg-panel-raised text-brand border border-brand-line' : 'text-ink-dim hover:text-ink border border-transparent'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Label className="mb-5" aria-live="polite">{status}</Label>
 
-      {shown === null && (
+      {sorted === null && (
         <div className="flex flex-col gap-2.5">
           {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} className="h-[100px] cut-corner-tag" />
           ))}
         </div>
       )}
-      {shown && shown.length === 0 && <EmptyState>No matches found for this search.</EmptyState>}
-      {shown && shown.length > 0 && (
+      {shown && shown.length === 0 && <EmptyState>No matches found for this search and filter.</EmptyState>}
+
+      {shown && shown.length > 0 && view === 'list' && (
         <div ref={listRef} onKeyDown={onListKeyDown} className="flex flex-col gap-2.5">
-          {shown.map((m, i) => (
-            <MatchCard
-              key={m.match_id}
-              m={m}
-              delay={Math.min(i * 30, 600)}
-              onOpen={() => onOpenMatch(m.match_id)}
-              open={Boolean(openPeeks[m.match_id])}
-              onTogglePeek={() => togglePeek(m.match_id)}
-              factors={peekData[m.match_id]}
-            />
-          ))}
+          {shown.map((m, i) => renderCard(m, i))}
         </div>
       )}
+
+      {shown && shown.length > 0 && view === 'event' && (
+        <div ref={listRef} onKeyDown={onListKeyDown} className="flex flex-col gap-8">
+          {groups.map(([event, items]) => {
+            const sweeps = items.filter((m) => outcomeOf(m) === 'sweep').length
+            const close = items.filter((m) => outcomeOf(m) === 'close').length
+            return (
+              <section key={event} aria-label={event}>
+                <header className="sticky top-2 z-20 flex items-center justify-between gap-4 mb-3 py-2 px-3 bg-bg/90 backdrop-blur-sm border border-line cut-corner-tag">
+                  <div className="min-w-0">
+                    <div className="font-display text-base font-semibold truncate">{event}</div>
+                    <div className="font-mono text-[11px] text-ink-faint tabular-nums">
+                      {items.length} series, {sweeps} sweeps, {close} close
+                    </div>
+                  </div>
+                  <div className="flex h-1.5 w-24 shrink-0 overflow-hidden bg-line-soft" aria-hidden="true">
+                    <div className="h-full bg-brand" style={{ width: `${(sweeps / items.length) * 100}%` }} />
+                    <div className="h-full bg-mvp" style={{ width: `${(close / items.length) * 100}%` }} />
+                  </div>
+                </header>
+                <div className="flex flex-col gap-2.5">{items.map((m, i) => renderCard(m, i))}</div>
+              </section>
+            )
+          })}
+        </div>
+      )}
+
       {canShowMore && (
         <div className="flex justify-center mt-6">
           <Button variant="secondary" onClick={() => setLimit((n) => n + PAGE_SIZE)}>

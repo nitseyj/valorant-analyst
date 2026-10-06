@@ -5,6 +5,7 @@ import { useCountUp } from '../lib/hooks'
 import { VersusIcon } from '../components/icons'
 import { Panel, Label, SectionHeader, ImpactBar, RoleChip, Select, Button, LoadingState, EmptyState, Skeleton } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
+import TeamWatermark from '../components/TeamWatermark'
 import PlayerStatRow from '../components/PlayerStatRow'
 import WinRateRing from '../components/WinRateRing'
 import MapImage from '../components/MapImage'
@@ -15,6 +16,8 @@ const MAP_SORTS = [
   { key: 'played', label: 'Most played' },
   { key: 'rate', label: 'Win rate' },
 ]
+// A map needs this many played before it can be called the strongest or weakest.
+const MIN_MAPS_FOR_CALLOUT = 5
 
 // Did this team win a recent match? The score is "a-b" and the team is either
 // side, so the result is read from whichever side matches the profile name.
@@ -25,6 +28,23 @@ function resultFor(match, teamName) {
   if (match.team_a === teamName) return a > b ? 'W' : a < b ? 'L' : 'D'
   if (match.team_b === teamName) return b > a ? 'W' : b < a ? 'L' : 'D'
   return null
+}
+
+// Each opponent in the recent matches, with this team's record against them.
+// Sorted by how often they were played, then by name.
+function opponentsOf(matches, teamName) {
+  const byName = new Map()
+  for (const m of matches) {
+    const opponent = m.team_a === teamName ? m.team_b : m.team_b === teamName ? m.team_a : null
+    if (!opponent) continue
+    const entry = byName.get(opponent) ?? { name: opponent, w: 0, l: 0, d: 0, latest: m }
+    const r = resultFor(m, teamName)
+    if (r === 'W') entry.w += 1
+    else if (r === 'L') entry.l += 1
+    else if (r === 'D') entry.d += 1
+    byName.set(opponent, entry)
+  }
+  return [...byName.values()].sort((a, b) => b.w + b.l + b.d - (a.w + a.l + a.d) || a.name.localeCompare(b.name))
 }
 
 // The last few results as a row of pills, newest first.
@@ -49,6 +69,122 @@ function FormStrip({ matches, teamName }) {
         )
       })}
     </div>
+  )
+}
+
+// Roster years as a timeline. Clicking a tick or stepping with the arrow keys
+// picks the lineup; "All time" is the first tick and clears the year.
+function EraTrack({ years, value, onChange }) {
+  const items = [{ key: null, label: 'All time' }, ...[...years].sort((a, b) => a - b).map((y) => ({ key: y, label: String(y) }))]
+  const index = Math.max(0, items.findIndex((i) => i.key === value))
+  const active = items[index]
+
+  function onKeyDown(e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    const next = e.key === 'ArrowRight' ? Math.min(index + 1, items.length - 1) : Math.max(index - 1, 0)
+    onChange(items[next].key)
+    e.currentTarget.querySelectorAll('button')[next]?.focus()
+  }
+
+  return (
+    <div>
+      <div role="group" aria-label="Choose roster year" onKeyDown={onKeyDown} className="relative flex justify-between gap-1 pt-2 overflow-x-auto no-scrollbar">
+        <div className="absolute left-4 right-4 top-[1.1rem] h-px bg-line" aria-hidden="true" />
+        <div
+          className="absolute left-4 top-[1.1rem] h-px bg-brand transition-[width] duration-500 ease-out"
+          style={{ width: `calc((100% - 2rem) * ${items.length > 1 ? index / (items.length - 1) : 0})` }}
+          aria-hidden="true"
+        />
+        {items.map((it, i) => {
+          const on = i === index
+          return (
+            <button
+              key={it.label}
+              type="button"
+              aria-pressed={on}
+              tabIndex={on ? 0 : -1}
+              onClick={() => onChange(it.key)}
+              className="relative z-10 flex flex-col items-center gap-2 min-h-[40px] min-w-[3.25rem] px-1 font-mono text-[11px] transition-colors"
+              style={{ color: on ? 'var(--color-brand)' : undefined }}
+            >
+              <span
+                className={`block w-2.5 h-2.5 rotate-45 transition-colors ${on ? 'bg-brand' : 'bg-line'}`}
+                style={on ? { boxShadow: '0 0 10px var(--color-brand-line)' } : undefined}
+                aria-hidden="true"
+              />
+              <span className={on ? '' : 'text-ink-faint hover:text-ink'}>{it.label}</span>
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-3 font-mono text-xs text-ink-faint" aria-live="polite">
+        {active.key == null ? 'Showing the all-time roster across every loaded season.' : `Showing the ${active.label} lineup.`}
+      </p>
+    </div>
+  )
+}
+
+// Best and worst maps by win rate, among maps with enough games to mean something.
+function MapCallouts({ maps }) {
+  const eligible = maps.filter((m) => m.maps_played >= MIN_MAPS_FOR_CALLOUT)
+  if (eligible.length < 2) return null
+  const sorted = [...eligible].sort((a, b) => (b.map_win_rate || 0) - (a.map_win_rate || 0))
+  const best = sorted[0]
+  const worst = sorted[sorted.length - 1]
+  const cells = [
+    { label: 'Strongest map', m: best, tone: 'var(--color-win)' },
+    { label: 'Weakest map', m: worst, tone: 'var(--color-brand)' },
+  ]
+  return (
+    <div className="grid sm:grid-cols-2 gap-3 mb-5">
+      {cells.map(({ label, m, tone }, i) => (
+        <div key={label} className="rise-in cut-corner-tag bg-panel-raised border border-line px-4 py-3 flex items-center gap-3" style={{ animationDelay: `${i * 90}ms` }}>
+          <MapImage map={m.map} className="w-10 h-10 shrink-0 cut-corner-tag" />
+          <div className="min-w-0">
+            <Label className="mb-1">{label}</Label>
+            <div className="text-sm font-semibold truncate">{m.map}</div>
+            <div className="font-mono text-xs tabular-nums" style={{ color: tone }}>
+              {((m.map_win_rate || 0) * 100).toFixed(0)}% over {m.maps_played} maps
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function OpponentGrid({ opponents, onOpenMatch }) {
+  if (opponents.length === 0) return null
+  return (
+    <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {opponents.map((o, i) => {
+        const played = o.w + o.l + o.d
+        const winShare = played ? (o.w / played) * 100 : 0
+        return (
+          <li key={o.name} className="rise-in" style={{ animationDelay: `${i * 60}ms` }}>
+            <button
+              type="button"
+              onClick={() => onOpenMatch(o.latest.match_id)}
+              className="lift group w-full cut-corner-tag bg-panel border border-line hover:border-brand/40 px-4 py-3.5 text-left"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold truncate group-hover:text-brand transition-colors">{o.name}</span>
+                <span className="font-mono text-xs tabular-nums shrink-0">
+                  <span className="text-win">{o.w}W</span> <span className="text-brand">{o.l}L</span>
+                  {o.d > 0 && <span className="text-ink-dim"> {o.d}D</span>}
+                </span>
+              </div>
+              <div className="flex h-1.5 mt-3 overflow-hidden bg-line-soft" aria-hidden="true">
+                <div className="grow-x h-full bg-win" style={{ width: `${winShare}%`, animationDelay: `${i * 60 + 200}ms` }} />
+                <div className="h-full bg-brand/60" style={{ width: `${100 - winShare}%` }} />
+              </div>
+              <div className="font-mono text-[11px] text-ink-faint mt-2">Open the latest meeting</div>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -81,11 +217,7 @@ function MapLeadersPanel({ teamId, mapName }) {
     <div className="pt-3 pb-1">
       <div className="grid sm:grid-cols-3 gap-3">
         {cells.map(({ label, entry, suffix }, i) => (
-          <div
-            key={label}
-            className="rise-in lift cut-corner-tag bg-panel-raised border border-line px-4 py-3"
-            style={{ animationDelay: `${i * 80}ms` }}
-          >
+          <div key={label} className="rise-in lift cut-corner-tag bg-panel-raised border border-line px-4 py-3" style={{ animationDelay: `${i * 80}ms` }}>
             <Label className="mb-1.5">{label}</Label>
             {entry ? (
               <>
@@ -98,9 +230,7 @@ function MapLeadersPanel({ teamId, mapName }) {
           </div>
         ))}
       </div>
-      {leaders.small_sample && (
-        <p className="text-xs text-ink-faint mt-2">Small sample on this map. Shown anyway, but not a reliable read.</p>
-      )}
+      {leaders.small_sample && <p className="text-xs text-ink-faint mt-2">Small sample on this map. Shown anyway, but not a reliable read.</p>}
     </div>
   )
 }
@@ -165,6 +295,7 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
     return list
   }, [p, mapSort])
 
+  const opponents = useMemo(() => (p ? opponentsOf(p.recent_matches, p.name) : []), [p])
   const agentTotal = useMemo(() => (p ? p.agent_usage.reduce((sum, a) => sum + a.games_used, 0) : 0), [p])
   const winsCount = useCountUp(p ? p.record.wins : null, 1000)
   const lossesCount = useCountUp(p ? p.record.losses : null, 1000)
@@ -177,7 +308,8 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
     <div className="fade-up">
       <section className="relative overflow-hidden cut-corner border border-line bg-panel px-6 md:px-9 py-8 mb-6">
         <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-brand" aria-hidden="true" />
-        <div className="flex flex-col lg:flex-row lg:items-center gap-8">
+        <TeamWatermark name={p.name} size={460} className="-right-32 top-1/2 -translate-y-1/2" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center gap-8">
           <div className="flex items-center gap-6 min-w-0 flex-1">
             <TeamBadge name={p.name} accent="brand" size={84} />
             <div className="min-w-0">
@@ -235,6 +367,7 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
                 ))}
               </div>
             </div>
+            <MapCallouts maps={p.map_stats} />
             <ul className="flex flex-col">
               {sortedMaps.map((m, i) => {
                 const isOpen = expandedMap === m.map
@@ -253,11 +386,7 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
                       <span className="font-mono text-xs text-ink-dim w-28 text-right shrink-0 tabular-nums">
                         {m.maps_won} of {m.maps_played} ({rate.toFixed(0)}%)
                       </span>
-                      <span
-                        className="font-mono text-ink-faint text-xs transition-transform duration-200 shrink-0"
-                        style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
-                        aria-hidden="true"
-                      >
+                      <span className="font-mono text-ink-faint text-xs transition-transform duration-200 shrink-0" style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }} aria-hidden="true">
                         ▸
                       </span>
                     </button>
@@ -270,18 +399,13 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
 
           <Panel className="p-6 rise-in" style={{ animationDelay: '240ms' }}>
             <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
-              <SectionHeader className="mb-0">
-                {p.roster_year ? `${p.roster_year} roster` : 'All-time roster'}
-              </SectionHeader>
-              {p.roster_years && p.roster_years.length > 1 && (
-                <Select
-                  value={year}
-                  onChange={(v) => setYear(v ? Number(v) : null)}
-                  placeholder="All-time roster"
-                  options={p.roster_years.map((y) => ({ value: String(y), label: `${y} lineup` }))}
-                />
-              )}
+              <SectionHeader className="mb-0">{p.roster_year ? `${p.roster_year} roster` : 'All-time roster'}</SectionHeader>
             </div>
+            {p.roster_years && p.roster_years.length > 1 && (
+              <div className="mb-6">
+                <EraTrack years={p.roster_years} value={year} onChange={setYear} />
+              </div>
+            )}
             {p.top_players.length === 0 && <EmptyState>No roster data for that year.</EmptyState>}
             <div className="flex flex-col">
               {p.top_players.map((pl, i) => (
@@ -346,6 +470,14 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
           </Panel>
         </div>
       </div>
+
+      {opponents.length > 0 && (
+        <section className="mt-8">
+          <SectionHeader>Opponents in recent matches</SectionHeader>
+          <Label className="mb-5">Record against each opponent, from the matches listed below</Label>
+          <OpponentGrid opponents={opponents} onOpenMatch={onOpenMatch} />
+        </section>
+      )}
 
       <section className="mt-8">
         <SectionHeader>Recent matches</SectionHeader>

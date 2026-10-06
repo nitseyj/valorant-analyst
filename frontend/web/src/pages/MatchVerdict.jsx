@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { getMatchVerdict, getTimeline } from '../lib/api'
+import { getMatchVerdict, getTimeline, getMatchGames } from '../lib/api'
 import { extractMvp, impactColor } from '../lib/format'
 import { useCountUp } from '../lib/hooks'
-import { CategoryIcon, MapGlyph, TrophyIcon } from '../components/icons'
+import { CategoryIcon, TrophyIcon } from '../components/icons'
 import { Panel, Label, SectionHeader, ImpactBar, ExpandableRow, Pips, MapScoreLine, Tag, LoadingState, EmptyState } from '../components/ui'
 import EvidenceRow from '../components/EvidenceRow'
 import PlayerStatRow from '../components/PlayerStatRow'
@@ -10,6 +10,8 @@ import TeamBadge from '../components/TeamBadge'
 import PlayerPortrait from '../components/PlayerPortrait'
 import RoundTimeline from '../components/RoundTimeline'
 import EconomyChart from '../components/EconomyChart'
+import GameLineups from '../components/GameLineups'
+import MapImage from '../components/MapImage'
 
 const TEAM_A_COLOR = 'var(--color-brand)'
 const TEAM_B_COLOR = 'var(--color-team-b)'
@@ -98,6 +100,40 @@ function ImpactDivergence({ factors, teamA, teamB, onSelect }) {
   )
 }
 
+// Both teams' players on one rating scale, each team ranked by rating. The
+// bars start at zero, so the gaps are shown at their true size.
+function RatingDuel({ teamA, teamB, playersA, playersB }) {
+  const rated = (players) => players.filter((p) => typeof p.rating === 'number').sort((x, y) => y.rating - x.rating)
+  const listA = rated(playersA || [])
+  const listB = rated(playersB || [])
+  const max = Math.max(0, ...listA.map((p) => p.rating), ...listB.map((p) => p.rating))
+  if (max <= 0) return null
+  const side = (team, list, color) => (
+    <div className="min-w-0 flex flex-col gap-3">
+      <div className="font-mono text-xs" style={{ color }}>{team}</div>
+      {list.map((p, i) => (
+        <div key={p.name} className="flex items-center gap-3 min-w-0">
+          <span className="text-xs text-ink-dim w-24 truncate shrink-0">{p.name}</span>
+          <div className="flex-1 h-2 bg-line-soft overflow-hidden" aria-hidden="true">
+            <div className="grow-x h-full" style={{ width: `${(p.rating / max) * 100}%`, background: color, animationDelay: `${i * 70}ms` }} />
+          </div>
+          <span className="font-mono text-xs tabular-nums w-11 text-right shrink-0" style={{ color }}>{Number(p.rating).toFixed(2)}</span>
+        </div>
+      ))}
+    </div>
+  )
+  return (
+    <Panel className="p-6 mb-5 rise-in">
+      <SectionHeader>Rating duel</SectionHeader>
+      <Label className="mb-5">Both teams on one scale, ranked by rating</Label>
+      <div className="grid md:grid-cols-2 gap-6">
+        {side(teamA, listA, TEAM_A_COLOR)}
+        {side(teamB, listB, TEAM_B_COLOR)}
+      </div>
+    </Panel>
+  )
+}
+
 function Lineup({ team, players, color }) {
   return (
     <Panel className="p-5 min-w-0 rise-in">
@@ -119,13 +155,20 @@ export default function MatchVerdict({ matchId }) {
   const [timeline, setTimeline] = useState(null)
   const [focusRank, setFocusRank] = useState(null)
   const [activeSection, setActiveSection] = useState('factors')
+  const [mapPick, setMapPick] = useState(null)
+  // Map names come from the match endpoint, which always lists every game.
+  const [games, setGames] = useState(null)
 
   useEffect(() => {
     let cancelled = false
     setM(null)
     setTimeline(null)
+    setGames(null)
     getMatchVerdict(matchId).then(({ verdict }) => {
       if (!cancelled) setM(verdict)
+    })
+    getMatchGames(matchId).then((data) => {
+      if (!cancelled) setGames(data?.games ?? null)
     })
     getTimeline(matchId).then((t) => {
       if (!cancelled) setTimeline(t)
@@ -183,6 +226,7 @@ export default function MatchVerdict({ matchId }) {
   const sections = [
     { id: 'factors', label: 'Factors' },
     ...(hasLineups ? [{ id: 'lineups', label: 'Lineups' }] : []),
+    { id: 'maps', label: 'Maps' },
     ...(timeline ? [{ id: 'rounds', label: 'Rounds' }, { id: 'economy', label: 'Economy' }] : []),
   ]
 
@@ -228,18 +272,37 @@ export default function MatchVerdict({ matchId }) {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-4">
-          {m.map_scores.map((s, i) => (
-            <div key={i} className="rise-in border-t border-line-soft pt-4 first:border-t-0 first:pt-0" style={{ animationDelay: `${200 + i * 90}ms` }}>
-              <div className="flex items-center gap-3 mb-2.5">
-                <span className="w-4 flex justify-center shrink-0 text-ink-faint">{m.maps && <MapGlyph map={m.maps[i]} />}</span>
-                {m.maps && <span className="text-sm font-semibold text-ink shrink-0">{m.maps[i]}</span>}
-                <span className="flex-1 h-px bg-line-soft" />
-                <MapScoreLine scoreStr={s} />
-              </div>
-              <div className="pl-7"><Pips scoreStr={s} /></div>
-            </div>
-          ))}
+        <div className="mt-8 grid grid-cols-2 md:grid-cols-3 gap-3">
+          {m.map_scores.map((s, i) => {
+            const map = games?.[i]?.map_name ?? m.maps?.[i] ?? null
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={!map}
+                onClick={() => {
+                  setMapPick(map)
+                  jumpTo('maps')
+                }}
+                aria-label={`${map ?? `Map ${i + 1}`}, ${s}. Open its lineups`}
+                className="rise-in group relative overflow-hidden cut-corner-tag border border-line hover:border-brand/40 min-h-[132px] text-left disabled:cursor-default"
+                style={{ animationDelay: `${200 + i * 90}ms` }}
+              >
+                {map && <MapImage map={map} className="absolute inset-0 w-full h-full transition-transform duration-500 group-hover:scale-105" />}
+                <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(to top, rgba(10,10,13,0.95), rgba(10,10,13,0.3) 65%, transparent)' }} aria-hidden="true" />
+                <div className="absolute inset-x-0 bottom-0 p-3">
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-display text-sm font-semibold truncate">{map ?? `Map ${i + 1}`}</div>
+                      <div className="font-mono text-[11px] text-ink-dim">Map {i + 1} of {m.map_scores.length}</div>
+                    </div>
+                    <MapScoreLine scoreStr={s} />
+                  </div>
+                  <div className="mt-2"><Pips scoreStr={s} /></div>
+                </div>
+              </button>
+            )
+          })}
         </div>
       </Panel>
 
@@ -300,12 +363,19 @@ export default function MatchVerdict({ matchId }) {
         <section id="lineups" data-section className="scroll-mt-28 mb-6">
           <SectionHeader>Lineups</SectionHeader>
           <Label className="mb-4">Select a player for full stats</Label>
+          <RatingDuel teamA={m.team_a} teamB={m.team_b} playersA={m.roster.team_a} playersB={m.roster.team_b} />
           <div className="grid lg:grid-cols-2 gap-5">
             <Lineup team={m.team_a} players={m.roster.team_a} color={TEAM_A_COLOR} />
             <Lineup team={m.team_b} players={m.roster.team_b} color={TEAM_B_COLOR} />
           </div>
         </section>
       )}
+
+      <section id="maps" data-section className="scroll-mt-28 mb-6">
+        <SectionHeader>Map lineups</SectionHeader>
+        <Label className="mb-5">Each player's agent on the map you pick</Label>
+        <GameLineups key={matchId} matchId={matchId} mapName={mapPick} />
+      </section>
 
       {timeline && (
         <div className="flex flex-col gap-5">
