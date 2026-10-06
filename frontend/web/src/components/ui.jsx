@@ -8,13 +8,18 @@ function tint(color, percent = 35) {
   return `color-mix(in srgb, ${color} ${percent}%, transparent)`
 }
 
-export function Panel({ children, className = '', accent, ...rest }) {
+// The edge is an inset hairline rather than a border, so it follows the
+// clipped corner cleanly and cannot be lost to a caller's style prop. Accented
+// panels also get a short solid tab on the top-left edge.
+export function Panel({ children, className = '', accent, style, ...rest }) {
+  const edge = accent ? tint(accent, 40) : 'var(--color-line)'
   return (
     <div
-      className={`cut-corner bg-panel border ${className}`}
-      style={{ borderColor: accent ? tint(accent) : 'var(--color-line)' }}
+      className={`cut-corner bg-panel relative ${className}`}
+      style={{ boxShadow: `inset 0 0 0 1px ${edge}`, ...style }}
       {...rest}
     >
+      {accent && <span className="absolute top-0 left-0 h-[2px] w-14 pointer-events-none" style={{ background: accent }} aria-hidden="true" />}
       {children}
     </div>
   )

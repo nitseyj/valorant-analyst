@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getTeamProfile, getTeamMapLeaders, getTeamRadar, listTeams } from '../lib/api'
 import { roleOf } from '../lib/roles'
+import { useCountUp } from '../lib/hooks'
 import { VersusIcon } from '../components/icons'
 import { Panel, Label, SectionHeader, ImpactBar, RoleChip, Select, Button, LoadingState, EmptyState, Skeleton } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -8,6 +9,48 @@ import PlayerStatRow from '../components/PlayerStatRow'
 import WinRateRing from '../components/WinRateRing'
 import MapImage from '../components/MapImage'
 import RadarChart from '../components/RadarChart'
+
+const FORM_LENGTH = 5
+const MAP_SORTS = [
+  { key: 'played', label: 'Most played' },
+  { key: 'rate', label: 'Win rate' },
+]
+
+// Did this team win a recent match? The score is "a-b" and the team is either
+// side, so the result is read from whichever side matches the profile name.
+// Returns null when the names do not line up, rather than guessing.
+function resultFor(match, teamName) {
+  const [a, b] = String(match.score).split('-').map(Number)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+  if (match.team_a === teamName) return a > b ? 'W' : a < b ? 'L' : 'D'
+  if (match.team_b === teamName) return b > a ? 'W' : b < a ? 'L' : 'D'
+  return null
+}
+
+// The last few results as a row of pills, newest first.
+function FormStrip({ matches, teamName }) {
+  const results = matches.slice(0, FORM_LENGTH).map((m) => ({ id: m.match_id, r: resultFor(m, teamName) }))
+  if (results.length === 0) return null
+  return (
+    <div className="flex items-center gap-2" role="list" aria-label={`Last ${results.length} results, newest first`}>
+      {results.map(({ id, r }, i) => {
+        const tone =
+          r === 'W' ? 'bg-win/15 text-win border-win/40' : r === 'L' ? 'bg-brand-dim text-brand border-brand-line' : 'bg-line-soft text-ink-dim border-line'
+        return (
+          <span
+            key={id}
+            role="listitem"
+            className={`rise-in inline-flex items-center justify-center w-8 h-8 font-mono text-xs font-semibold border cut-corner-tag ${tone}`}
+            style={{ animationDelay: `${i * 70}ms` }}
+          >
+            <span className="sr-only">{r === 'W' ? 'Win' : r === 'L' ? 'Loss' : 'Unknown'}</span>
+            <span aria-hidden="true">{r ?? '-'}</span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
 
 function MapLeadersPanel({ teamId, mapName }) {
   const [leaders, setLeaders] = useState(null)
@@ -37,8 +80,12 @@ function MapLeadersPanel({ teamId, mapName }) {
   return (
     <div className="pt-3 pb-1">
       <div className="grid sm:grid-cols-3 gap-3">
-        {cells.map(({ label, entry, suffix }) => (
-          <div key={label} className="cut-corner-tag bg-panel-raised border border-line px-4 py-3">
+        {cells.map(({ label, entry, suffix }, i) => (
+          <div
+            key={label}
+            className="rise-in lift cut-corner-tag bg-panel-raised border border-line px-4 py-3"
+            style={{ animationDelay: `${i * 80}ms` }}
+          >
             <Label className="mb-1.5">{label}</Label>
             {entry ? (
               <>
@@ -62,6 +109,7 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
   const [p, setP] = useState(null)
   const [year, setYear] = useState(null)
   const [expandedMap, setExpandedMap] = useState(null)
+  const [mapSort, setMapSort] = useState('played')
   const [compareOptions, setCompareOptions] = useState(null)
   const [compareWith, setCompareWith] = useState(null)
   const [radar, setRadar] = useState(undefined) // undefined = loading, null = failed
@@ -109,41 +157,92 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
     }
   }, [teamId, compareWith, radarRetry])
 
+  const sortedMaps = useMemo(() => {
+    if (!p) return []
+    const list = [...p.map_stats]
+    if (mapSort === 'rate') list.sort((a, b) => (b.map_win_rate || 0) - (a.map_win_rate || 0))
+    else list.sort((a, b) => b.maps_played - a.maps_played)
+    return list
+  }, [p, mapSort])
+
+  const agentTotal = useMemo(() => (p ? p.agent_usage.reduce((sum, a) => sum + a.games_used, 0) : 0), [p])
+  const winsCount = useCountUp(p ? p.record.wins : null, 1000)
+  const lossesCount = useCountUp(p ? p.record.losses : null, 1000)
+  const matchesCount = useCountUp(p ? p.record.matches : null, 1000)
+
   if (p === null) return <LoadingState>Loading team profile</LoadingState>
   if (!p) return <EmptyState>Could not load this team. The backend is unreachable and no bundled profile exists for it.</EmptyState>
 
   return (
     <div className="fade-up">
-      <Panel accent="var(--color-brand)" className="relative overflow-hidden p-6 md:p-8 mb-6 flex items-center gap-6 flex-wrap">
+      <section className="relative overflow-hidden cut-corner border border-line bg-panel px-6 md:px-9 py-8 mb-6">
         <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-brand" aria-hidden="true" />
-        <TeamBadge name={p.name} accent="brand" size={84} />
-        <div className="flex-1 min-w-[220px]">
-          <Label tone="brand" className="mb-2">Team profile{p.roster_year ? `, ${p.roster_year}` : ''}</Label>
-          <h1 className="font-display text-3xl md:text-4xl font-bold leading-tight">{p.name}</h1>
-          <div className="font-mono text-sm text-ink-dim mt-2 tabular-nums">
-            {p.record.wins}W / {p.record.losses}L, {p.record.matches} matches
+        <div className="flex flex-col lg:flex-row lg:items-center gap-8">
+          <div className="flex items-center gap-6 min-w-0 flex-1">
+            <TeamBadge name={p.name} accent="brand" size={84} />
+            <div className="min-w-0">
+              <Label tone="brand" className="mb-2">Team profile{p.roster_year ? `, ${p.roster_year}` : ''}</Label>
+              <h1 className="font-display text-3xl md:text-4xl font-bold leading-tight">{p.name}</h1>
+              <dl className="flex flex-wrap gap-x-7 gap-y-3 mt-4">
+                <div>
+                  <dt><Label>Wins</Label></dt>
+                  <dd className="font-display text-2xl font-bold tabular-nums text-win mt-1">{Math.round(winsCount)}</dd>
+                </div>
+                <div>
+                  <dt><Label>Losses</Label></dt>
+                  <dd className="font-display text-2xl font-bold tabular-nums text-brand mt-1">{Math.round(lossesCount)}</dd>
+                </div>
+                <div>
+                  <dt><Label>Matches</Label></dt>
+                  <dd className="font-display text-2xl font-bold tabular-nums mt-1">{Math.round(matchesCount)}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div className="flex items-center gap-8 shrink-0">
+            {p.recent_matches.length > 0 && (
+              <div>
+                <Label className="mb-2">Form</Label>
+                <FormStrip matches={p.recent_matches} teamName={p.name} />
+              </div>
+            )}
+            <div className="text-center">
+              <WinRateRing winRate={p.win_rate} size={92} />
+              <Label className="mt-2">Win rate</Label>
+            </div>
           </div>
         </div>
-        <div className="text-center">
-          <WinRateRing winRate={p.win_rate} size={92} />
-          <Label className="mt-2">Win rate</Label>
-        </div>
-      </Panel>
+      </section>
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
         <div className="space-y-6 min-w-0">
-          <Panel className="p-6">
+          <Panel className="p-6 rise-in" style={{ animationDelay: '120ms' }}>
             <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
               <SectionHeader className="mb-0">Map pool</SectionHeader>
-              <Label>Select a map for its leaders</Label>
+              <div role="group" aria-label="Sort maps" className="flex gap-1 p-1 bg-panel-raised border border-line cut-corner-tag">
+                {MAP_SORTS.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    aria-pressed={mapSort === s.key}
+                    onClick={() => setMapSort(s.key)}
+                    className={`min-h-[36px] px-3 font-mono text-[11px] cut-corner-tag transition-colors ${
+                      mapSort === s.key ? 'bg-brand text-[#14060a] font-semibold' : 'text-ink-dim hover:text-ink'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <ul className="flex flex-col">
-              {p.map_stats.map((m) => {
+              {sortedMaps.map((m, i) => {
                 const isOpen = expandedMap === m.map
                 const rate = (m.map_win_rate || 0) * 100
                 return (
-                  <li key={m.map} className="border-t border-line-soft first:border-t-0">
+                  <li key={m.map} className="rise-in border-t border-line-soft first:border-t-0" style={{ animationDelay: `${180 + i * 60}ms` }}>
                     <button
+                      type="button"
                       onClick={() => setExpandedMap(isOpen ? null : m.map)}
                       aria-expanded={isOpen}
                       className="w-full flex items-center gap-3 py-3 text-left hover:bg-panel-raised transition-colors px-1"
@@ -169,7 +268,7 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
             </ul>
           </Panel>
 
-          <Panel className="p-6">
+          <Panel className="p-6 rise-in" style={{ animationDelay: '240ms' }}>
             <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
               <SectionHeader className="mb-0">
                 {p.roster_year ? `${p.roster_year} roster` : 'All-time roster'}
@@ -185,15 +284,17 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
             </div>
             {p.top_players.length === 0 && <EmptyState>No roster data for that year.</EmptyState>}
             <div className="flex flex-col">
-              {p.top_players.map((pl) => (
-                <PlayerStatRow key={pl.name} pl={pl} color="var(--color-brand)" />
+              {p.top_players.map((pl, i) => (
+                <div key={pl.name} className="rise-in" style={{ animationDelay: `${300 + i * 60}ms` }}>
+                  <PlayerStatRow pl={pl} color="var(--color-brand)" />
+                </div>
               ))}
             </div>
           </Panel>
         </div>
 
         <div className="space-y-6 min-w-0">
-          <Panel className="p-6">
+          <Panel className="p-6 rise-in" style={{ animationDelay: '160ms' }}>
             <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
               <SectionHeader className="mb-0">Stat profile</SectionHeader>
               {compareOptions && compareOptions.length > 0 && (
@@ -219,13 +320,29 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
             )}
           </Panel>
 
-          <Panel className="p-6">
-            <SectionHeader>Agent usage</SectionHeader>
-            <div className="flex flex-wrap gap-2">
-              {p.agent_usage.map((a) => (
-                <RoleChip key={a.agent} role={roleOf(a.agent)} label={`${a.agent} (${a.games_used})`} />
-              ))}
+          <Panel className="p-6 rise-in" style={{ animationDelay: '280ms' }}>
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <SectionHeader className="mb-0">Agent usage</SectionHeader>
+              <Label>Share of games</Label>
             </div>
+            <ul className="flex flex-col gap-3">
+              {p.agent_usage.map((a, i) => {
+                const share = agentTotal ? (a.games_used / agentTotal) * 100 : 0
+                return (
+                  <li key={a.agent} className="rise-in" style={{ animationDelay: `${320 + i * 50}ms` }}>
+                    <div className="flex items-center justify-between gap-3 mb-1.5">
+                      <RoleChip role={roleOf(a.agent)} label={a.agent} />
+                      <span className="font-mono text-xs text-ink-dim tabular-nums">
+                        {a.games_used} games, {share.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="h-1 bg-line-soft overflow-hidden" aria-hidden="true">
+                      <div className="grow-x h-full bg-brand" style={{ width: `${share}%`, animationDelay: `${360 + i * 50}ms` }} />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
           </Panel>
         </div>
       </div>
@@ -233,23 +350,39 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
       <section className="mt-8">
         <SectionHeader>Recent matches</SectionHeader>
         <div className="flex flex-col gap-2.5">
-          {p.recent_matches.map((m) => (
-            <button
-              key={m.match_id}
-              onClick={() => onOpenMatch(m.match_id)}
-              className="cut-corner-tag bg-panel border border-line hover:border-brand/40 hover:bg-panel-raised px-5 py-4 text-left transition-colors"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold truncate flex items-center gap-2">
-                    {m.team_a} <VersusIcon className="text-ink-faint shrink-0" /> {m.team_b}
+          {p.recent_matches.map((m, i) => {
+            const result = resultFor(m, p.name)
+            return (
+              <button
+                key={m.match_id}
+                type="button"
+                onClick={() => onOpenMatch(m.match_id)}
+                className="lift rise-in group cut-corner-tag bg-panel border border-line hover:border-brand/40 hover:bg-panel-raised px-5 py-4 text-left transition-colors"
+                style={{ animationDelay: `${400 + i * 50}ms` }}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate flex items-center gap-2">
+                      {m.team_a} <VersusIcon className="text-ink-faint shrink-0" /> {m.team_b}
+                    </div>
+                    <div className="text-xs text-ink-faint mt-1 truncate">{m.tournament}, {m.match_type}</div>
                   </div>
-                  <div className="text-xs text-ink-faint mt-1 truncate">{m.tournament}, {m.match_type}</div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {result && (
+                      <span
+                        className={`inline-flex items-center px-2 py-1 border font-mono text-[11px] font-semibold uppercase tracking-wide cut-corner-tag ${
+                          result === 'W' ? 'text-win border-win/40 bg-win/10' : result === 'L' ? 'text-brand border-brand-line bg-brand-dim' : 'text-ink-dim border-line'
+                        }`}
+                      >
+                        {result === 'W' ? 'Win' : result === 'L' ? 'Loss' : 'Draw'}
+                      </span>
+                    )}
+                    <div className="font-mono text-base font-semibold tabular-nums">{m.score}</div>
+                  </div>
                 </div>
-                <div className="font-mono text-base font-semibold shrink-0 tabular-nums">{m.score}</div>
-              </div>
-            </button>
-          ))}
+              </button>
+            )
+          })}
         </div>
         {p.note && <p className="text-xs text-ink-faint mt-4">{p.note}</p>}
       </section>
