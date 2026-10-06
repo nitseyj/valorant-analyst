@@ -58,27 +58,35 @@ def round_timeline(conn, match_id, team_a_id, team_b_id):
 
 
 def economy_timeline(conn, match_id, team_a_id, team_b_id):
-    """Per game: list of {round_number, team_a_loadout, team_b_loadout},
-    parsed to real integers. Games with no economy data loaded (a real,
-    known gap — see DATA_QUALITY_FINDINGS.md) are simply omitted, not
-    padded with fake zeros."""
+    """Per game: list of rounds, each with the loadout value and the remaining
+    credits for both teams, parsed to real integers. Some seasons (VCT 2026
+    in the source data) have no loadout values but do have remaining credits,
+    so a round is kept when either value is present. A value that is missing
+    stays null rather than being padded with zeros. Games with neither value
+    are omitted (see DATA_QUALITY_FINDINGS.md)."""
     games = _games_for_match(conn, match_id)
     out = []
     for game_id, map_name in games:
         rows = conn.execute(
-            "SELECT round_number, team_id, loadout_value FROM round_team_economy WHERE game_id = ? ORDER BY round_number",
+            "SELECT round_number, team_id, loadout_value, remaining_credits "
+            "FROM round_team_economy WHERE game_id = ? ORDER BY round_number",
             (game_id,),
         ).fetchall()
         by_round = {}
-        for round_number, team_id, loadout_value in rows:
-            parsed = _parse_k(loadout_value)
-            if parsed is None:
+        for round_number, team_id, loadout_value, remaining_credits in rows:
+            loadout = _parse_k(loadout_value)
+            remaining = _parse_k(remaining_credits)
+            if loadout is None and remaining is None:
                 continue
-            entry = by_round.setdefault(round_number, {"round": round_number, "team_a_loadout": None, "team_b_loadout": None})
+            entry = by_round.setdefault(
+                round_number,
+                {"round": round_number, "team_a_loadout": None, "team_b_loadout": None,
+                 "team_a_remaining": None, "team_b_remaining": None},
+            )
             if team_id == team_a_id:
-                entry["team_a_loadout"] = parsed
+                entry["team_a_loadout"], entry["team_a_remaining"] = loadout, remaining
             elif team_id == team_b_id:
-                entry["team_b_loadout"] = parsed
+                entry["team_b_loadout"], entry["team_b_remaining"] = loadout, remaining
         rounds = [by_round[k] for k in sorted(by_round)]
         if rounds:
             out.append({"game_id": game_id, "map": map_name, "rounds": rounds})

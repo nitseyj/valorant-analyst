@@ -38,7 +38,7 @@ curl "http://127.0.0.1:8000/stats/meta?year=2025&map=Bind"
 ## Configuration
 
 `main.py` defaults to `backend/data/valorant.db` (relative to its own
-location) — the combined multi-year database (2021–2026). Point it at a
+location): the combined multi-year database (2021 to 2026). Point it at a
 different database with an environment variable:
 
 ```bash
@@ -54,8 +54,9 @@ VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
 | GET | `/matches/{match_id}` | Basic match info: teams, score, maps played |
 | GET | `/matches/{match_id}/verdict` | Full ranked, evidence-backed verdict for a series |
 | GET | `/games/{game_id}/verdict` | Same, scoped to a single map |
-| GET | `/teams` | Every team with at least one loaded match, all-time record + win rate, strongest first. Optional `q` name search, optional `tier` (`tier1`\|`tier2`) — with 4,000+ teams loaded, `tier1` (international/franchised orgs, ~190 teams) is what keeps the default view fast |
-| GET | `/teams/{team_id}/profile` | Full-season team profile. Optional `year` scopes the roster (`top_players`) to one loaded year — falls back to all-time if that team has no data for it |
+| GET | `/games/{game_id}/lineups` | Each team's players on one map, with the agent each played. Returns 404 for an unknown `game_id` |
+| GET | `/teams` | Every team with at least one loaded match, all-time record and win rate, strongest first. Optional `q` name search, optional `tier` (`tier1`\|`tier2`). With 4,000+ teams loaded, `tier1` (international and franchised organisations, about 190 teams) keeps the default view fast |
+| GET | `/teams/{team_id}/profile` | Full-season team profile. Optional `year` scopes the roster (`top_players`) to one loaded year. Falls back to all-time if that team has no data for it |
 | GET | `/teams/{team_id}/map-leaders` | On-demand per-map stats for one team: most kills, most assists, most effective (highest avg rating) player. Required `map` |
 | GET | `/teams/{team_id}/radar` | 5-axis stat profile (win rate, round win rate, avg rating, avg ACS, clutches/map) for the "pentagon chart". Optional `compare_with` (a second `team_id`) overlays a head-to-head comparison on shared bounds |
 | GET | `/players/radar` | Same 5-axis idea for a player (Rating, ACS, ADR, KAST%, HS%). Required `name`, optional `compare_with` (a second player's exact name) |
@@ -66,11 +67,20 @@ VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
 | GET | `/stats/overview` | League-wide dashboard aggregates |
 | GET | `/stats/meta` | Agent pick rates / role distribution. Optional `year` and `map` filters (response includes `available_years`/`available_maps` for building filter UI) |
 
+## Security
+
+CORS currently allows every origin (`allow_origins=["*"]` in `main.py`). That is
+appropriate for local development only. Restrict it to the frontend's origin
+before the API is reachable from anywhere else.
+
+The full response contract for every endpoint is in
+[`../docs/API.md`](../docs/API.md).
+
 ## Troubleshooting
 
-- **Database not found** — see Configuration above; run
+- **Database not found:** see Configuration above, and run
   `scripts/load_match_analyzer.py` first if you haven't built a database yet
   (see the root `README.md`).
-- **Import errors** — `backend/__init__.py`, `backend/app/__init__.py`, and
+- **Import errors:** `backend/__init__.py`, `backend/app/__init__.py`, and
   `backend/app/analyzers/__init__.py` must all exist (they can be empty) for
   `from app.analyzers import match_verdict` to resolve.

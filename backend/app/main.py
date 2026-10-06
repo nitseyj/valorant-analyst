@@ -251,6 +251,69 @@ def get_game_verdict(game_id: int):
         conn.close()
 
 
+@app.get("/games/{game_id}/lineups")
+@functools.lru_cache(maxsize=512)
+def get_game_lineups(game_id: int):
+    """Each team's players on one map, with the agent each played most on
+    that map. A player who swapped agents keeps every agent they played, with
+    the most-used one first. Players with no agent record come back with
+    agent set to null, rather than being dropped."""
+    conn = get_connection()
+    try:
+        game = conn.execute(
+            """SELECT g.game_id, g.map_name, m.team_a_id, m.team_b_id, ta.name AS team_a, tb.name AS team_b
+               FROM games g
+               JOIN matches m ON g.match_id = m.match_id
+               JOIN teams ta ON m.team_a_id = ta.team_id
+               JOIN teams tb ON m.team_b_id = tb.team_id
+               WHERE g.game_id = ?""",
+            (game_id,),
+        ).fetchone()
+        if game is None:
+            raise HTTPException(status_code=404, detail=f"game_id {game_id} not found")
+        rows = conn.execute(
+            """SELECT pgi.team_id, p.player_id, p.name, a.name AS agent, COUNT(*) AS n
+               FROM player_game_impact pgi
+               JOIN players p ON pgi.player_id = p.player_id
+               LEFT JOIN player_game_agents pga ON pga.game_id = pgi.game_id AND pga.player_id = pgi.player_id
+               LEFT JOIN agents a ON a.agent_id = pga.agent_id
+               WHERE pgi.game_id = ?
+               GROUP BY pgi.team_id, p.player_id, a.name""",
+            (game_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    players = {}
+    for r in rows:
+        entry = players.setdefault(
+            (r["team_id"], r["player_id"]), {"name": r["name"], "team_id": r["team_id"], "agents": {}}
+        )
+        if r["agent"]:
+            entry["agents"][r["agent"]] = entry["agents"].get(r["agent"], 0) + r["n"]
+
+    def side(team_id, team_name):
+        members = []
+        for (tid, _), p in players.items():
+            if tid != team_id:
+                continue
+            ranked = sorted(p["agents"].items(), key=lambda kv: (-kv[1], kv[0]))
+            members.append({
+                "name": p["name"],
+                "agent": ranked[0][0] if ranked else None,
+                "agents": [a for a, _ in ranked],
+            })
+        members.sort(key=lambda p: p["name"].lower())
+        return {"team_id": team_id, "name": team_name, "players": members}
+
+    return {
+        "game_id": game["game_id"],
+        "map": game["map_name"],
+        "team_a": side(game["team_a_id"], game["team_a"]),
+        "team_b": side(game["team_b_id"], game["team_b"]),
+    }
+
+
 @app.get("/teams")
 @functools.lru_cache(maxsize=64)
 def get_teams(

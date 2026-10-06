@@ -135,3 +135,28 @@ visibly garbled somewhere in the UI; it's the source data, not a bug.
 Database file: ~180MB (gitignored — see the root README for the rebuild
 command; GitHub hard-blocks pushes over 100MB, so this can't be committed
 the way the old single-season `valorant_test_2025.db` was).
+
+## VCT 2026: loadout values are empty in `eco_rounds.csv`
+
+In `vct_2026/matches/eco_rounds.csv`, the `Loadout Value` column is empty on
+all 28,944 rows. The `Remaining Credits` column is filled on every row. This
+is a gap in the upstream file, not a loader fault. The loader copies the
+values it is given, so the database holds NULL loadouts for 2026 economy rows.
+
+Coverage of loadout values, by season, in `eco_rounds.csv`:
+
+| Season | Rows | With loadout | Missing |
+|---|---|---|---|
+| 2021 | 363,518 | 363,518 | 0 |
+| 2022 | 358,798 | 358,798 | 0 |
+| 2023 | 33,032 | 33,032 | 0 |
+| 2024 | 34,514 | 34,514 | 0 |
+| 2025 | 25,182 | 22,632 | 2,550 (about 10%) |
+| 2026 | 28,944 | 0 | 28,944 (all) |
+
+Handling: the timeline endpoint returns remaining credits alongside loadout
+values. The Match Verdict economy chart plots loadout when a series has it,
+and falls back to remaining credits, labelled as such, when it does not.
+Series from 2025 with some missing loadouts show gaps in the line rather than
+zeros.
+
