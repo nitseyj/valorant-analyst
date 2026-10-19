@@ -6,6 +6,15 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Added (fourth revision)
+
+- **Home:** the spotlight match is now a match replay: an auto-playing,
+  round-by-round race chart built entirely from the match's own round data
+  (no video), cycling through the top 3 highlight matches by impact. Reduced
+  motion shows each match's finished chart immediately and just rotates
+  between matches more slowly. A Pause control stops it, consistent with the
+  ticker's.
+
 ### Documentation
 
 - **License:** the MIT grant now explicitly excludes the real team logos
@@ -159,7 +168,8 @@ not yet use version numbers.
   games have no agent records. The lineup views show a note or a placeholder
   in these cases.
 - Team logos are tracked under `frontend/prototype/assets/valorant/teams/`.
-  Confirm your rights to them before publishing a fork.
-- Twelve `react(set-state-in-effect)` lint warnings remain. They follow one
+  They are third-party trademarks, not covered by this project's MIT license;
+  see the License section of the root README.
+- 14 `react(set-state-in-effect)` lint warnings remain. They follow one
   pattern used across several pages.
 - The screenshots in `docs/screenshots/` predate the interface revamp.

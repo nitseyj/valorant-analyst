@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getOverview, getMeta, listMatches, getMatchVerdict } from '../lib/api'
+import { getOverview, getMeta, listMatches, getMatchVerdict, getTimeline } from '../lib/api'
 import { extractMvp, impactColor, matchScoreStr } from '../lib/format'
 import { ROLE_COLOR } from '../lib/roles'
 import { Label, EmptyState, Skeleton, Button } from '../components/ui'
@@ -7,7 +7,7 @@ import TeamBadge from '../components/TeamBadge'
 import PlayerPortrait from '../components/PlayerPortrait'
 import AgentImage from '../components/AgentImage'
 import MapAtlas from '../components/MapAtlas'
-import { useCountUp } from '../lib/hooks'
+import { useCountUp, prefersReducedMotion } from '../lib/hooks'
 
 const RANK_OPTIONS = [
   { key: 'acs', label: 'ACS' },
@@ -209,41 +209,170 @@ function SeasonColumns({ phases }) {
   )
 }
 
-// The spotlight match as a full-width feature. The score sits large between
-// the two teams, and the impact ring reads the verdict's real impact score.
-function SpotlightFeature({ spotlight, onOpen }) {
-  const color = impactColor(spotlight.primary_factor.winner || spotlight.winner, spotlight.team_a)
+// Rounds won so far by each side, starting from zero before round 1. Mirrors
+// RoundTimeline's cumulative() math, kept separate here so this stays in
+// Home's eagerly-loaded chunk without pulling in that much heavier panel,
+// which is lazy-loaded only on the verdict page.
+function cumulativeWins(rounds) {
+  let a = 0
+  let b = 0
+  const aSeries = [0]
+  const bSeries = [0]
+  for (const r of rounds) {
+    if (r.winner === 'a') a += 1
+    else b += 1
+    aSeries.push(a)
+    bSeries.push(b)
+  }
+  return { aSeries, bSeries }
+}
+
+// A read-only race chart driven by the clock rather than the pointer: it
+// only ever shows the rounds "revealed" so far, so the line visibly builds
+// left to right as the replay plays.
+function ReplayChart({ rounds, revealed, teamA, teamB }) {
+  const w = 560
+  const h = 120
+  const left = 8
+  const right = 8
+  const top = 10
+  const bottom = 10
+  const innerW = w - left - right
+  const innerH = h - top - bottom
+  const n = rounds.length
+  const shown = rounds.slice(0, revealed)
+  const { aSeries, bSeries } = cumulativeWins(shown)
+  const yMax = Math.max(1, aSeries[aSeries.length - 1], bSeries[bSeries.length - 1])
+  const x = (i) => left + (n > 0 ? (i / n) * innerW : 0)
+  const y = (v) => top + innerH - (v / yMax) * innerH
+  const line = (series) => series.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+  const aNow = aSeries[aSeries.length - 1] ?? 0
+  const bNow = bSeries[bSeries.length - 1] ?? 0
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(spotlight.match_id)}
-      className="rise-in group w-full text-left border border-line bg-panel hover:border-brand/40 transition-colors cut-corner p-6 md:p-10"
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="w-full h-auto"
+      role="img"
+      aria-label={`Replay in progress: ${teamA} ${aNow}, ${teamB} ${bNow}, after round ${revealed} of ${n}.`}
     >
-      <div className="flex items-center justify-between gap-4 mb-8">
-        <span className="font-mono text-xs text-brand">Spotlight match</span>
-        <span className="font-mono text-xs text-ink-faint group-hover:text-brand transition-colors">Open verdict</span>
+      <line x1={left} x2={w - right} y1={top + innerH} y2={top + innerH} stroke="var(--color-line-soft)" />
+      {n > 0 && (
+        <>
+          <polyline points={line(aSeries)} fill="none" stroke="var(--color-brand)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          <polyline points={line(bSeries)} fill="none" stroke="var(--color-team-b)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+        </>
+      )}
+      {revealed > 0 && (
+        <>
+          <circle cx={x(aSeries.length - 1)} cy={y(aNow)} r="4.5" fill="var(--color-brand)" stroke="var(--color-panel)" strokeWidth="2" />
+          <circle cx={x(bSeries.length - 1)} cy={y(bNow)} r="4.5" fill="var(--color-team-b)" stroke="var(--color-panel)" strokeWidth="2" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+// An auto-playing replay of a real map's round-by-round progress, cycling
+// through the loaded highlight matches. Built entirely from the match's own
+// round data (no video, nothing fabricated): each round reveals on a timer,
+// and the chart builds up exactly the way RoundTimeline's race chart would if
+// you watched it round by round. Reduced-motion users get each match's full,
+// finished chart immediately, with just the slower rotation between matches.
+function MatchReplay({ pool, onOpen }) {
+  const [index, setIndex] = useState(0)
+  const [timeline, setTimeline] = useState(undefined) // undefined = loading
+  const [revealed, setRevealed] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const current = pool[index % pool.length]
+  const reduced = prefersReducedMotion()
+
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+    setTimeline(undefined)
+    setRevealed(0)
+    getTimeline(current.match_id, { signal: controller.signal }).then((t) => {
+      if (!cancelled) setTimeline(t)
+    })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [current.match_id])
+
+  const game = timeline?.round_timeline?.[0] ?? null
+  const rounds = useMemo(() => game?.rounds ?? [], [game])
+
+  useEffect(() => {
+    if (paused || rounds.length === 0) return undefined
+    if (reduced) {
+      setRevealed(rounds.length)
+      const t = setTimeout(() => setIndex((i) => (i + 1) % pool.length), 7000)
+      return () => clearTimeout(t)
+    }
+    if (revealed < rounds.length) {
+      const t = setTimeout(() => setRevealed((r) => r + 1), 550)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(() => setIndex((i) => (i + 1) % pool.length), 2200)
+    return () => clearTimeout(t)
+  }, [revealed, rounds.length, paused, reduced, pool.length])
+
+  const color = impactColor(current.primary_factor.winner || current.winner, current.team_a)
+
+  return (
+    <div className="rise-in w-full border border-line bg-panel cut-corner p-6 md:p-10">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
+        <span className="font-mono text-xs text-brand">Match replay</span>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[11px] text-ink-faint" aria-live="polite">
+            {game ? `${game.map}, round ${Math.min(revealed, rounds.length)} of ${rounds.length}` : 'Loading replay...'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPaused((p) => !p)}
+            aria-pressed={paused}
+            className="min-h-[36px] px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-dim hover:text-ink border border-line cut-corner-tag"
+          >
+            {paused ? 'Play' : 'Pause'}
+          </button>
+        </div>
       </div>
-      <div className="grid md:grid-cols-[1fr_auto_1fr] items-center gap-6 md:gap-10">
-        <div className="flex items-center gap-4 min-w-0">
-          <TeamBadge name={spotlight.team_a} accent="brand" size={64} />
-          <span className="font-display text-2xl md:text-4xl font-bold truncate">{spotlight.team_a}</span>
+      <button type="button" onClick={() => onOpen(current.match_id)} className="group w-full text-left">
+        <div className="grid md:grid-cols-[1fr_auto_1fr] items-center gap-6 md:gap-10 mb-6">
+          <div className="flex items-center gap-4 min-w-0">
+            <TeamBadge name={current.team_a} accent="brand" size={64} />
+            <span className="font-display text-2xl md:text-4xl font-bold truncate">{current.team_a}</span>
+          </div>
+          <div
+            className="font-mono text-5xl md:text-7xl font-semibold tabular-nums text-center group-hover:opacity-85 transition-opacity"
+            style={{ textShadow: `0 0 28px ${color}` }}
+          >
+            {matchScoreStr(current)}
+          </div>
+          <div className="flex items-center justify-end gap-4 min-w-0 md:text-right">
+            <span className="font-display text-2xl md:text-4xl font-bold truncate">{current.team_b}</span>
+            <TeamBadge name={current.team_b} accent="team-b" size={64} />
+          </div>
         </div>
-        <div className="font-mono text-5xl md:text-7xl font-semibold tabular-nums text-center" style={{ textShadow: `0 0 28px ${color}` }}>
-          {matchScoreStr(spotlight)}
-        </div>
-        <div className="flex items-center justify-end gap-4 min-w-0 md:text-right">
-          <span className="font-display text-2xl md:text-4xl font-bold truncate">{spotlight.team_b}</span>
-          <TeamBadge name={spotlight.team_b} accent="team-b" size={64} />
-        </div>
+      </button>
+      <div className="cut-corner-tag bg-panel-raised border border-line p-4 md:p-5 mb-6">
+        {rounds.length > 0 ? (
+          <ReplayChart rounds={rounds} revealed={revealed} teamA={current.team_a} teamB={current.team_b} />
+        ) : (
+          <div className="h-[120px] flex items-center justify-center font-mono text-xs text-ink-faint">
+            {timeline === undefined ? 'Loading replay...' : 'No round data for this map.'}
+          </div>
+        )}
       </div>
-      <div className="mt-8 pt-6 border-t border-line-soft flex flex-col md:flex-row md:items-center gap-5">
-        <ImpactRing value={spotlight.ranked_factors[0].impact} color={color} />
-        <p className="text-sm text-ink-dim leading-relaxed max-w-3xl">{spotlight.primary_factor.summary}</p>
-        <span className="md:ml-auto font-mono text-xs shrink-0" style={{ color }}>
-          {spotlight.primary_factor.category}: {spotlight.primary_factor.impact_label.toLowerCase()}
+      <button type="button" onClick={() => onOpen(current.match_id)} className="group w-full text-left flex flex-col md:flex-row md:items-center gap-5 pt-6 border-t border-line-soft">
+        <ImpactRing value={current.ranked_factors[0].impact} color={color} />
+        <p className="text-sm text-ink-dim leading-relaxed max-w-3xl">{current.primary_factor.summary}</p>
+        <span className="md:ml-auto font-mono text-xs shrink-0 group-hover:text-brand transition-colors" style={{ color }}>
+          {current.primary_factor.category}: {current.primary_factor.impact_label.toLowerCase()} · Open verdict
         </span>
-      </div>
-    </button>
+      </button>
+    </div>
   )
 }
 
@@ -551,9 +680,13 @@ export default function Home({ onOpenMatch, onOpenTeam, onNavigate, onOpenPalett
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const spotlight = highlights && highlights.length
-    ? highlights.slice().sort((a, b) => b.ranked_factors[0].impact - a.ranked_factors[0].impact)[0]
-    : null
+  // Top 3 by impact, for the replay to cycle through. useMemo so MatchReplay's
+  // effects (keyed on the pool's length and the current match's id) don't see
+  // a new array identity, and thus a reset, on every unrelated re-render.
+  const replayPool = useMemo(
+    () => (highlights && highlights.length ? highlights.slice().sort((a, b) => b.ranked_factors[0].impact - a.ranked_factors[0].impact).slice(0, 3) : null),
+    [highlights]
+  )
 
   const notable = (highlights || [])
     .map((m) => {
@@ -616,9 +749,9 @@ export default function Home({ onOpenMatch, onOpenTeam, onNavigate, onOpenPalett
         <SeriesTicker matches={matches} onOpenMatch={onOpenMatch} />
       </section>
 
-      {spotlight && (
+      {replayPool && replayPool.length > 0 && (
         <section className="mb-14">
-          <SpotlightFeature spotlight={spotlight} onOpen={onOpenMatch} />
+          <MatchReplay pool={replayPool} onOpen={onOpenMatch} />
         </section>
       )}
 
