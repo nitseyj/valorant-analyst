@@ -26,6 +26,20 @@ export function useCountUp(target, duration = 1000) {
   return value
 }
 
+// Reflects `value` after it stops changing for `delay`ms. Pairs with a plain
+// effect keyed on the debounced value, so a search box or filter doesn't need
+// to hand-roll its own setTimeout/clearTimeout (or a ref-keyed map of them,
+// for a list of independent inputs: each instance of this hook already has
+// its own timer).
+export function useDebouncedValue(value, delay = 250) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
+
 // "/" moves focus to a search box from anywhere on the page, unless the user
 // is already typing somewhere.
 export function useSlashToFocus(ref) {

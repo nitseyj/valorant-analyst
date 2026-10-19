@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { searchPlayers, simulateRoster } from '../lib/api'
 import { ROLE_COLOR, roleOf } from '../lib/roles'
-import { useCountUp } from '../lib/hooks'
+import { useCountUp, useDebouncedValue } from '../lib/hooks'
 import { CrosshairDeco, DotsDeco, RoleGlyph, VersusIcon } from '../components/icons'
 import { Panel, Button, Label, SectionHeader } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -30,15 +30,15 @@ function FramedAgent({ agent, className = '' }) {
   )
 }
 
-// Each slot debounces its OWN search independently (a ref map keyed by
-// "prefix-index", not one shared timer), so typing in one slot never cancels
-// a search pending in another. Only one dropdown is open at a time.
+// Each slot is its own component instance, so each debounces its OWN search
+// independently: typing in one slot never cancels a search pending in
+// another. Only one dropdown is open at a time.
 //
 // The dropdown is a listbox: arrow keys move through matches, Enter picks
 // the highlighted one, and Escape closes it without losing the typed text.
 function PlayerSlot({ slotKey, value, placeholder, accent, onChange, onSelect, openSlot, setOpenSlot, results, known }) {
-  const timers = useRef({})
   const [active, setActive] = useState(-1)
+  const debouncedValue = useDebouncedValue(value, 250)
   const isOpen = openSlot === slotKey && results.length > 0
   const color = accentColor(accent)
   const listId = `${slotKey}-list`
@@ -49,16 +49,28 @@ function PlayerSlot({ slotKey, value, placeholder, accent, onChange, onSelect, o
     const val = e.target.value
     onChange(val)
     setActive(-1)
-    clearTimeout(timers.current[slotKey])
     if (!val || val.length < 2) {
       if (openSlot === slotKey) setOpenSlot(null, [])
-      return
     }
-    timers.current[slotKey] = setTimeout(async () => {
-      const players = await searchPlayers(val)
-      setOpenSlot(slotKey, players)
-    }, 250)
   }
+
+  useEffect(() => {
+    if (!debouncedValue || debouncedValue.length < 2) return undefined
+    let cancelled = false
+    const controller = new AbortController()
+    searchPlayers(debouncedValue, { signal: controller.signal }).then((players) => {
+      if (!cancelled) setOpenSlot(slotKey, players)
+    })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+    // slotKey is fixed for this component instance's lifetime, and
+    // setOpenSlot is a plain (non-memoized) function from the parent, so
+    // neither belongs in the dependency list without re-firing the search
+    // on every unrelated parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedValue])
 
   function choose(p) {
     onSelect(p)

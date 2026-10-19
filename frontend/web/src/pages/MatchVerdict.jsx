@@ -161,20 +161,23 @@ export default function MatchVerdict({ matchId }) {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
+    const { signal } = controller
     setM(null)
     setTimeline(null)
     setGames(null)
-    getMatchVerdict(matchId).then(({ verdict }) => {
+    getMatchVerdict(matchId, { signal }).then(({ verdict }) => {
       if (!cancelled) setM(verdict)
     })
-    getMatchGames(matchId).then((data) => {
+    getMatchGames(matchId, { signal }).then((data) => {
       if (!cancelled) setGames(data?.games ?? null)
     })
-    getTimeline(matchId).then((t) => {
+    getTimeline(matchId, { signal }).then((t) => {
       if (!cancelled) setTimeline(t)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [matchId])
 

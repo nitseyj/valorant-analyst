@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listTeams, listMatches } from '../lib/api'
 import { matchScoreStr } from '../lib/format'
+import { useDebouncedValue } from '../lib/hooks'
 import { SearchIcon } from './icons'
 
 const PAGES = [
@@ -37,21 +38,24 @@ export default function CommandPalette({ onClose, onNavigate, onOpenTeam, onOpen
     return () => window.removeEventListener('keydown', onEscape)
   }, [onClose])
 
+  const debouncedQuery = useDebouncedValue(query, 200)
+
   useEffect(() => {
-    if (q.length < 2) return undefined
+    const trimmed = debouncedQuery.trim()
+    if (trimmed.length < 2) return undefined
     let cancelled = false
-    const t = setTimeout(async () => {
-      const [{ teams }, { matches }] = await Promise.all([
-        listTeams({ q }),
-        listMatches({ team: query.trim(), limit: 6 }),
-      ])
+    const controller = new AbortController()
+    Promise.all([
+      listTeams({ q: trimmed.toLowerCase(), signal: controller.signal }),
+      listMatches({ team: trimmed, limit: 6, signal: controller.signal }),
+    ]).then(([{ teams }, { matches }]) => {
       if (!cancelled) setRemote({ teams: (teams || []).slice(0, 6), matches: matches || [] })
-    }, 200)
+    })
     return () => {
       cancelled = true
-      clearTimeout(t)
+      controller.abort()
     }
-  }, [q, query])
+  }, [debouncedQuery])
 
   const items = useMemo(() => {
     const pages = PAGES.filter((p) => !q || p.label.toLowerCase().includes(q)).map((p) => ({

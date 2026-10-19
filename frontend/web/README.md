@@ -30,19 +30,25 @@ VITE_API_BASE=http://127.0.0.1:9000 npm run dev
 | `npm run build` | Production build into `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npx oxlint src/` | Lint the source |
+| `npm test` | Vitest unit tests (component logic in isolation) |
+| `npm run test:e2e` | Playwright smoke tests against the dev server (`npx playwright install chromium` once, first time) |
 
 ## Structure
 
 ```
 src/
   App.jsx             View routing, back-navigation history, the command
-                      palette, and the Ctrl+K shortcut
+                      palette, and the Ctrl+K shortcut. Every page but Home,
+                      and the command palette, load as their own chunk
+                      (React.lazy + Suspense), wrapped in an ErrorBoundary.
   lib/
     api.js            One function per backend endpoint. Each tries the live
                       API first and falls back to bundled demo data where a
                       real fallback exists. Pages never call fetch() directly.
+                      Every function accepts an optional AbortSignal.
     hooks.js          useCountUp (eased number animation that honours reduced
-                      motion) and useSlashToFocus ("/" focuses a search box)
+                      motion), useDebouncedValue (shared search/filter
+                      debounce), and useSlashToFocus ("/" focuses a search box)
     format.js         Formatting helpers: percentages, scores, impact colours
     roles.js          Agent to role mapping. It mirrors
                       backend/app/analyzers/agent_analysis.py.
@@ -52,6 +58,7 @@ src/
                       Button, Tag, ImpactBar, ExpandableRow, RoleChip, Pips,
                       MapScoreLine, Select, Skeleton, EmptyState, LoadingState
     Sidebar.jsx       Navigation, with a Back button
+    ErrorBoundary.jsx A render error in one page shows a scoped fallback instead of blanking the app
     CommandPalette.jsx  Ctrl+K search across teams, matches, and pages
     MapAtlas.jsx      Home: all twelve maps with pointer tilt and a detail panel
     GameLineups.jsx   Match verdict: each team's players and agents on one map

@@ -6,6 +6,45 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Added (third revision)
+
+- **Testing:** a Playwright smoke suite (`frontend/web/tests/`) covering
+  every top-level page, layout at two viewports, and that navigating away
+  from a match verdict mid-load does not throw. A Vitest unit test for
+  `ErrorBoundary`. A pytest suite (`backend/tests/`) covering the k-notation
+  parser, `build_verdict`'s invariants, and core API routes, using the real
+  database and skipping (not failing) when it is not present locally.
+- **Frontend:** an `ErrorBoundary` component wraps each page, so a render
+  error in one page shows a scoped fallback instead of blanking the app.
+  It resets when the user navigates to a different page.
+
+### Changed (third revision)
+
+- **Frontend:** every page's data-fetching effect now cancels its in-flight
+  request with `AbortController` when the component unmounts or its
+  dependencies change, instead of only ignoring the response once it
+  arrives. `lib/api.js`'s functions all accept an optional `signal`.
+- **Frontend:** every page except Home, and the command palette, now loads
+  as its own chunk (`React.lazy` + `Suspense`), instead of one bundle for
+  the whole app. The initial script drops from 474KB to 253KB (127KB to
+  78KB gzipped).
+- **Frontend:** the five hand-rolled search debounces (Teams, Matches,
+  Players, Legacy Builder, the command palette) now share one
+  `useDebouncedValue` hook in `lib/hooks.js`, instead of each keeping its
+  own `setTimeout`/`clearTimeout` (or, for Legacy Builder, a ref-keyed map
+  of them).
+- **Backend:** CORS no longer allows every origin. It defaults to the
+  frontend's own dev server, with more origins addable via the
+  comma-separated `VALORANT_CORS_ORIGINS` env var (for example, a LAN IP
+  when hosting the frontend for other devices on the network to reach).
+
+### Removed
+
+- **Backend:** `GET /games/{game_id}/verdict`, a per-map verdict endpoint
+  that was never called from the frontend (the match verdict page uses the
+  series-level verdict and the per-map lineups endpoint instead). Removed
+  rather than wired in, to avoid adding a UI surface nobody asked for.
+
 ### Added
 
 - **Home:** a command palette (Ctrl+K) that searches teams, matches, and pages;

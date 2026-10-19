@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listMatches, getMatchVerdict } from '../lib/api'
 import { impactColor, matchScoreStr } from '../lib/format'
-import { useCountUp, useSlashToFocus } from '../lib/hooks'
+import { useCountUp, useDebouncedValue, useSlashToFocus } from '../lib/hooks'
 import { SearchIcon, ChevronRightIcon, CategoryIcon } from '../components/icons'
 import { Label, EmptyState, Skeleton, Tag, Button, ImpactBar } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -262,11 +262,13 @@ export default function Matches({ onOpenMatch }) {
   const searchRef = useRef(null)
   const listRef = useRef(null)
 
+  const debouncedQuery = useDebouncedValue(query, 250)
+
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setStatus('Loading matches…')
-    const t = setTimeout(async () => {
-      const result = await listMatches({ team: query || undefined, year: year || undefined, limit })
+    listMatches({ team: debouncedQuery || undefined, year: year || undefined, limit, signal: controller.signal }).then((result) => {
       if (cancelled) return
       const { matches, total, live } = result
       setMatches(matches)
@@ -279,12 +281,12 @@ export default function Matches({ onOpenMatch }) {
           ? `Showing ${shown}${totalLabel} match${(total ?? shown) === 1 ? '' : 'es'}, live from the backend`
           : `Backend not reachable. Showing ${shown} bundled match${shown === 1 ? '' : 'es'}.`
       )
-    }, 250)
+    })
     return () => {
       cancelled = true
-      clearTimeout(t)
+      controller.abort()
     }
-  }, [query, year, limit])
+  }, [debouncedQuery, year, limit])
 
   useSlashToFocus(searchRef)
 

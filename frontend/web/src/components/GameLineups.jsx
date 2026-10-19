@@ -83,23 +83,27 @@ export default function GameLineups({ matchId, mapName }) {
 
   useEffect(() => {
     let cancelled = false
-    getMatchGames(matchId).then((data) => {
+    const controller = new AbortController()
+    getMatchGames(matchId, { signal: controller.signal }).then((data) => {
       if (!cancelled) setGames(data?.games ?? null)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [matchId])
 
   useEffect(() => {
     if (gameId == null) return undefined
     let cancelled = false
+    const controller = new AbortController()
     setLineup(undefined)
-    getGameLineups(gameId).then((data) => {
+    getGameLineups(gameId, { signal: controller.signal }).then((data) => {
       if (!cancelled) setLineup(data)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [gameId])
 

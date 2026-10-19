@@ -193,12 +193,14 @@ function MapLeadersPanel({ teamId, mapName }) {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setLeaders(null)
-    getTeamMapLeaders(teamId, mapName).then((data) => {
+    getTeamMapLeaders(teamId, mapName, { signal: controller.signal }).then((data) => {
       if (!cancelled) setLeaders(data)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [teamId, mapName])
 
@@ -257,33 +259,39 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setP(null)
-    getTeamProfile(teamId, { year }).then(({ profile }) => {
+    getTeamProfile(teamId, { year, signal: controller.signal }).then(({ profile }) => {
       if (!cancelled) setP(profile)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [teamId, year])
 
   useEffect(() => {
     let cancelled = false
-    listTeams({ tier: 'tier1' }).then(({ teams }) => {
+    const controller = new AbortController()
+    listTeams({ tier: 'tier1', signal: controller.signal }).then(({ teams }) => {
       if (!cancelled) setCompareOptions((teams || []).filter((t) => t.team_id !== teamId))
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [teamId])
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setRadar(undefined)
-    getTeamRadar(teamId, compareWith).then((data) => {
+    getTeamRadar(teamId, compareWith, { signal: controller.signal }).then((data) => {
       if (!cancelled) setRadar(data)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [teamId, compareWith, radarRetry])
 

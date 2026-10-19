@@ -132,9 +132,8 @@ visibly garbled somewhere in the UI; it's the source data, not a bug.
 | player_game_agents | 271,105 | 0 before fix #8 |
 | team_game_agent_picks | 37,685 | |
 
-Database file: ~180MB (gitignored — see the root README for the rebuild
-command; GitHub hard-blocks pushes over 100MB, so this can't be committed
-the way the old single-season `valorant_test_2025.db` was).
+Database file: about 180MB (gitignored, see the root README for the rebuild
+command). GitHub blocks pushes over 100MB, so this file cannot be committed.
 
 ## VCT 2026: loadout values are empty in `eco_rounds.csv`
 

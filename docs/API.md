@@ -135,19 +135,6 @@ Round-by-round and economy data for the series.
 
 ## Games (single map)
 
-### `GET /games/{game_id}/verdict`
-
-The same analysis as the series verdict, scoped to one map.
-
-| Field | Type | Description |
-|---|---|---|
-| `game_id` | integer | Identification |
-| `primary_factor` | object | Highest-impact factor, with `rank` included |
-| `ranked_factors` | array | Same shape as the series verdict |
-| `skipped_analyzers` | array | Analyzers without usable data |
-
-Errors: 404 when no analyzer produced a usable result for the map.
-
 ### `GET /games/{game_id}/lineups`
 
 Each team's players on one map, with the agent each played.

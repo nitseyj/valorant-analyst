@@ -140,7 +140,7 @@ control is provided to pause it (the Home ticker).
 
 ## API
 
-The backend exposes 17 endpoints. The interactive documentation is served at
+The backend exposes 16 endpoints. The interactive documentation is served at
 `/docs` while the API is running.
 
 | Endpoint | Purpose |
@@ -150,7 +150,6 @@ The backend exposes 17 endpoints. The interactive documentation is served at
 | `GET /matches/{match_id}` | Match summary, including every map (game) in the series |
 | `GET /matches/{match_id}/verdict` | Series-level ranked verdict |
 | `GET /matches/{match_id}/timeline` | Round and economy timelines |
-| `GET /games/{game_id}/verdict` | Verdict for a single map |
 | `GET /games/{game_id}/lineups` | Each team's players on one map, with the agent each played |
 | `GET /teams` | Team list, filterable by name and tier |
 | `GET /teams/{team_id}/profile` | Full-season team profile |

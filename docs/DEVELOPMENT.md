@@ -76,48 +76,32 @@ team logos into `public/` the first time, and does nothing afterwards.
 
 ## Testing
 
-The repository has no automated tests yet. The checks above, plus a browser
-pass over each page, have been the practice to date.
+**Frontend unit tests:** `npm test` in `frontend/web` runs Vitest against
+`src/**/*.test.jsx`. These are for component logic in isolation (for example
+`components/ErrorBoundary.test.jsx`), not for anything that needs a browser
+or the backend.
 
-When you add tests, a Playwright smoke test is the most useful first step,
-because it catches the errors a reader would see. The check below opens each
-top-level page, records page errors, and reports horizontal overflow and
-undersized buttons on a phone-sized viewport. Install Playwright in a
-location outside the repository, as a development tool, and run it against
-the dev server.
+**Frontend smoke tests:** `npm run test:e2e` in `frontend/web` runs the
+Playwright suite in `tests/smoke.spec.js` against the dev server, at a
+desktop and a phone-sized viewport. It opens each top-level page and checks
+for console errors, horizontal overflow, and buttons under 36px, then checks
+that navigating away from a match verdict page mid-load (which aborts its
+in-flight requests, see `lib/api.js`) does not throw. The first run needs
+`npx playwright install chromium` once. These run against the demo data
+fallback, so the backend does not need to be running.
 
-```javascript
-const { chromium } = require('playwright');
+Pages reached through a list, such as Team Profile and Match Verdict, need
+their own steps when extending this suite: open a team or match from its
+list, then check the same things.
 
-const PAGES = ['Home', 'Teams', 'Players', 'Matches', 'Analytics', 'Legacy Builder'];
-
-(async () => {
-  const browser = await chromium.launch();
-  for (const width of [1440, 375]) {
-    for (const name of PAGES) {
-      const page = await browser.newPage({ viewport: { width, height: 900 } });
-      const errors = [];
-      page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
-      await page.click(`nav >> text=${name}`);
-      await page.waitForSelector('main h1', { timeout: 20000 });
-      const layout = await page.evaluate(() => ({
-        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        smallButtons: [...document.querySelectorAll('main button')]
-          .filter((b) => b.offsetHeight > 0 && b.offsetHeight < 36).length,
-      }));
-      console.log(width, name, { ...layout, errors: errors.length });
-      await page.close();
-    }
-  }
-  await browser.close();
-})();
-```
-
-A passing run prints zero overflow, zero small buttons, and zero errors for
-every page. Pages reached through a list, such as Team Profile and Match
-Verdict, need their own steps: open a team or match from its list, then check
-the same things.
+**Backend tests:** `pytest` in `backend` (needs `pytest` and `httpx`
+installed, see `requirements_additions.txt`) runs `backend/tests/`. Pure
+functions (`_parse_k`, `_impact_label`) are tested directly; anything that
+reads `match_verdict.build_verdict` or hits a FastAPI route uses the real
+`backend/data/valorant.db`, consistent with this project's rule against
+fabricating data for a test. Those tests skip (not fail) when that database
+is not present locally, since it is gitignored and must be rebuilt per the
+root README.
 
 ## Adding a page
 

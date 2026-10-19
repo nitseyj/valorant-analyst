@@ -35,6 +35,18 @@ curl "http://127.0.0.1:8000/stats/meta?year=2025&map=Bind"
 `GET /matches/542195/verdict` should return Paper Rex as the winner with
 "Player Impact" as the `primary_factor`, HIGH IMPACT.
 
+## Testing
+
+```bash
+pip install pytest httpx   # see requirements_additions.txt
+pytest
+```
+
+`backend/tests/` covers pure parsing helpers directly, and the verdict and
+API-level tests against the real `backend/data/valorant.db`. Those tests skip
+when that database is not present locally (see "Rebuilding the database" in
+the root README).
+
 ## Configuration
 
 `main.py` defaults to `backend/data/valorant.db` (relative to its own
@@ -45,6 +57,15 @@ different database with an environment variable:
 VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
 ```
 
+CORS defaults to the frontend's own dev server (`http://localhost:5173` and
+`http://127.0.0.1:5173`). Add more allowed origins with a comma-separated
+environment variable, for example when hosting the frontend for other
+devices on the local network to reach:
+
+```bash
+VALORANT_CORS_ORIGINS=http://192.168.1.50:5173 uvicorn app.main:app --host 0.0.0.0
+```
+
 ## Endpoints
 
 | Method | Path | Purpose |
@@ -53,7 +74,6 @@ VALORANT_DB_PATH=/full/path/to/your.db uvicorn app.main:app --reload
 | GET | `/matches` | List matches. Filters: `team`, `tournament`, `year` (2021-2026); paginated (`limit`, `offset`); response includes `total` matching the filter, not just the page size |
 | GET | `/matches/{match_id}` | Basic match info: teams, score, maps played |
 | GET | `/matches/{match_id}/verdict` | Full ranked, evidence-backed verdict for a series |
-| GET | `/games/{game_id}/verdict` | Same, scoped to a single map |
 | GET | `/games/{game_id}/lineups` | Each team's players on one map, with the agent each played. Returns 404 for an unknown `game_id` |
 | GET | `/teams` | Every team with at least one loaded match, all-time record and win rate, strongest first. Optional `q` name search, optional `tier` (`tier1`\|`tier2`). With 4,000+ teams loaded, `tier1` (international and franchised organisations, about 190 teams) keeps the default view fast |
 | GET | `/teams/{team_id}/profile` | Full-season team profile. Optional `year` scopes the roster (`top_players`) to one loaded year. Falls back to all-time if that team has no data for it |

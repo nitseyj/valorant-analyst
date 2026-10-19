@@ -450,8 +450,9 @@ export default function Analytics() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setMeta(null)
-    getMeta({ year, map }).then((data) => {
+    getMeta({ year, map, signal: controller.signal }).then((data) => {
       if (cancelled) return
       setMeta(data)
       if (!options.years.length && data.available_years?.length) {
@@ -460,6 +461,7 @@ export default function Analytics() {
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
     // options is set from the first response only, so it is not a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -469,11 +471,13 @@ export default function Analytics() {
   useEffect(() => {
     if (!compare || baseline) return undefined
     let cancelled = false
-    getMeta().then((data) => {
+    const controller = new AbortController()
+    getMeta({ signal: controller.signal }).then((data) => {
       if (!cancelled) setBaseline(data)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [compare, baseline])
 

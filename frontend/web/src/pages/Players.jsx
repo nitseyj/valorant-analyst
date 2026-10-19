@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getPlayersLeaderboard, getPlayerRadar, searchPlayers } from '../lib/api'
-import { useCountUp } from '../lib/hooks'
+import { useCountUp, useDebouncedValue } from '../lib/hooks'
 import { Panel, Label, SectionHeader, Button, EmptyState, LoadingState, Skeleton } from '../components/ui'
 import PlayerPortrait from '../components/PlayerPortrait'
 import RadarChart from '../components/RadarChart'
@@ -99,23 +99,29 @@ function AddPlayer({ onAdd, disabled }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [active, setActive] = useState(0)
-  const timer = useRef(null)
+  const debouncedQuery = useDebouncedValue(query, 250)
   const listId = 'player-add-list'
 
   function onChange(e) {
     const val = e.target.value
     setQuery(val)
     setActive(0)
-    clearTimeout(timer.current)
-    if (val.trim().length < 2) {
-      setResults([])
-      return
-    }
-    timer.current = setTimeout(async () => {
-      const found = await searchPlayers(val.trim())
-      setResults((found || []).slice(0, 8))
-    }, 250)
+    if (val.trim().length < 2) setResults([])
   }
+
+  useEffect(() => {
+    const q = debouncedQuery.trim()
+    if (q.length < 2) return undefined
+    let cancelled = false
+    const controller = new AbortController()
+    searchPlayers(q, { signal: controller.signal }).then((found) => {
+      if (!cancelled) setResults((found || []).slice(0, 8))
+    })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [debouncedQuery])
 
   function pick(p) {
     onAdd(p)
@@ -323,27 +329,31 @@ export default function Players() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setPlayers(null)
-    getPlayersLeaderboard({ metric, limit: 20 }).then(({ players }) => {
+    getPlayersLeaderboard({ metric, limit: 20, signal: controller.signal }).then(({ players }) => {
       if (!cancelled) setPlayers(players)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [metric])
 
   useEffect(() => {
     if (selected.length === 0) {
       setRadar(undefined)
-      return
+      return undefined
     }
     let cancelled = false
+    const controller = new AbortController()
     setRadar(undefined)
-    getPlayerRadar(selected[0].name, selected[1]?.name).then((data) => {
+    getPlayerRadar(selected[0].name, selected[1]?.name, { signal: controller.signal }).then((data) => {
       if (!cancelled) setRadar(data)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [selected, radarRetry])
 

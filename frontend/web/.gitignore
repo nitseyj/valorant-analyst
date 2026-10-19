@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Test run artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # Team logos are already tracked once under frontend/prototype/assets — this
 # copy is synced locally (see scripts/sync-team-logos.mjs, runs via
 # `npm run predev`/`prebuild`) so the same ~28MB of PNGs isn't committed twice.

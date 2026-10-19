@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listTeams } from '../lib/api'
-import { useCountUp, useSlashToFocus } from '../lib/hooks'
+import { useCountUp, useDebouncedValue, useSlashToFocus } from '../lib/hooks'
 import { SearchIcon } from '../components/icons'
 import { Label, EmptyState, Skeleton, Panel, SectionHeader } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -345,18 +345,20 @@ export default function Teams({ onOpenTeam }) {
     if (teams) setKnown((prev) => ({ ...prev, ...Object.fromEntries(teams.map((t) => [t.team_id, t])) }))
   }, [teams])
 
+  const debouncedQuery = useDebouncedValue(query, 250)
+
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setTeams(null)
-    const t = setTimeout(async () => {
-      const { teams } = await listTeams({ q: query || undefined, tier: tier || undefined })
+    listTeams({ q: debouncedQuery || undefined, tier: tier || undefined, signal: controller.signal }).then(({ teams }) => {
       if (!cancelled) setTeams(teams)
-    }, 250)
+    })
     return () => {
       cancelled = true
-      clearTimeout(t)
+      controller.abort()
     }
-  }, [query, tier])
+  }, [debouncedQuery, tier])
 
   const active = TIERS.find((t) => t.key === tier) || TIERS[2]
   const sorted = useMemo(() => (teams ? sortTeams(teams, sortKey) : null), [teams, sortKey])

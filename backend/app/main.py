@@ -40,11 +40,11 @@ from app.analyzers import radar_stats
 # --------------------------------------------------------------------
 # Database
 # --------------------------------------------------------------------
-# Defaults to backend/data/valorant.db (relative to this file) — the
+# Defaults to backend/data/valorant.db (relative to this file): the
 # combined multi-year database (2021-2026), built by running
 # scripts/load_match_analyzer.py once per year against the same --out file.
 # Override with the VALORANT_DB_PATH env var to point at a different
-# database (e.g. the older single-season backend/data/valorant_test_2025.db).
+# database.
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "valorant.db"
 DB_PATH = Path(os.environ.get("VALORANT_DB_PATH", DEFAULT_DB_PATH))
 
@@ -89,12 +89,21 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Wide-open CORS for local frontend dev on a different port. Tighten this to
-# specific origins before any real deployment — never ship allow_origins=["*"]
-# to production.
+# Specific origins only, not a wildcard: allow_origins=["*"] would let any
+# website's JavaScript call this API from a visitor's browser. Defaults cover
+# the frontend's own dev server. Add more (for example a LAN IP, when hosting
+# the frontend for other devices on the network to reach) via the
+# comma-separated VALORANT_CORS_ORIGINS env var, e.g.
+# VALORANT_CORS_ORIGINS=http://192.168.1.50:5173 uvicorn app.main:app --host 0.0.0.0
+DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("VALORANT_CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -209,44 +218,6 @@ def get_match_verdict(match_id: int):
             return match_verdict.build_verdict(conn, match_id)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
-    finally:
-        conn.close()
-
-
-@app.get("/games/{game_id}/verdict")
-@functools.lru_cache(maxsize=512)
-def get_game_verdict(game_id: int):
-    """Same idea as /matches/{id}/verdict but scoped to a single map, for
-    when the frontend is showing one specific map rather than the series."""
-    conn = get_connection()
-    try:
-        results = []
-        skipped = []
-        for module in match_verdict.ANALYZERS:
-            try:
-                results.append(module.analyze_game(conn, game_id))
-            except ValueError as e:
-                skipped.append({"analyzer": module.__name__, "reason": str(e)})
-        if not results:
-            raise HTTPException(status_code=404, detail=f"game_id {game_id}: no analyzer produced a usable result")
-
-        results.sort(key=lambda r: r["impact"], reverse=True)
-        ranked = [
-            {
-                "rank": i,
-                "category": r["category"],
-                "impact": r["impact"],
-                "impact_label": match_verdict._impact_label(r["impact"]),
-                "winner": r["winner"],
-                "summary": r["summary"],
-                "evidence": r["evidence"],
-            }
-            for i, r in enumerate(results, start=1)
-        ]
-        response = {"game_id": game_id, "primary_factor": ranked[0], "ranked_factors": ranked}
-        if skipped:
-            response["skipped_analyzers"] = skipped
-        return response
     finally:
         conn.close()
 

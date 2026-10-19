@@ -24,19 +24,26 @@ import demoMeta from './demo/meta.json'
 
 export const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
 
-async function getJSON(path, { timeout = 2000 } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(timeout) })
+// `signal` is the caller's own AbortController signal (tied to a component's
+// unmount or dependency change), separate from the per-request timeout below.
+// AbortSignal.any() aborts on whichever fires first, so a page that navigates
+// away actually cancels the in-flight fetch instead of just letting a stale
+// response arrive and be ignored.
+async function getJSON(path, { timeout = 2000, signal } = {}) {
+  const timeoutSignal = AbortSignal.timeout(timeout)
+  const combined = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
+  const res = await fetch(`${API_BASE}${path}`, { signal: combined })
   if (!res.ok) throw new Error(`${path} -> ${res.status}`)
   return res.json()
 }
 
-export async function listMatches({ team, tournament, year, limit = 30 } = {}) {
+export async function listMatches({ team, tournament, year, limit = 30, signal } = {}) {
   try {
     const params = new URLSearchParams({ limit: String(limit) })
     if (team) params.set('team', team)
     if (tournament) params.set('tournament', tournament)
     if (year) params.set('year', String(year))
-    const json = await getJSON(`/matches?${params}`, { timeout: 4000 })
+    const json = await getJSON(`/matches?${params}`, { timeout: 4000, signal })
     return { matches: json.matches, total: json.total, live: true }
   } catch {
     let matches = Object.values(demoMatches)
@@ -54,18 +61,18 @@ export async function listMatches({ team, tournament, year, limit = 30 } = {}) {
   }
 }
 
-export async function getMatchVerdict(id) {
+export async function getMatchVerdict(id, { signal } = {}) {
   try {
-    return { verdict: await getJSON(`/matches/${id}/verdict`, { timeout: 6000 }), live: true }
+    return { verdict: await getJSON(`/matches/${id}/verdict`, { timeout: 6000, signal }), live: true }
   } catch {
     const demo = demoMatches[id]
     return { verdict: demo || null, live: false }
   }
 }
 
-export async function getTimeline(id) {
+export async function getTimeline(id, { signal } = {}) {
   try {
-    return await getJSON(`/matches/${id}/timeline`, { timeout: 5000 })
+    return await getJSON(`/matches/${id}/timeline`, { timeout: 5000, signal })
   } catch {
     return demoTimelines[id] || { round_timeline: [], economy_timeline: [] }
   }
@@ -73,9 +80,9 @@ export async function getTimeline(id) {
 
 // Every map played in a series, with its game id, for the map picker.
 // Returns null when the backend is unreachable, rather than inventing maps.
-export async function getMatchGames(matchId) {
+export async function getMatchGames(matchId, { signal } = {}) {
   try {
-    return await getJSON(`/matches/${matchId}`, { timeout: 4000 })
+    return await getJSON(`/matches/${matchId}`, { timeout: 4000, signal })
   } catch {
     return null
   }
@@ -83,21 +90,21 @@ export async function getMatchGames(matchId) {
 
 // Each team's players on one map and the agent each played. No demo fallback:
 // this data only exists in the live database, so offline the panel says so.
-export async function getGameLineups(gameId) {
+export async function getGameLineups(gameId, { signal } = {}) {
   try {
-    return await getJSON(`/games/${gameId}/lineups`, { timeout: 6000 })
+    return await getJSON(`/games/${gameId}/lineups`, { timeout: 6000, signal })
   } catch {
     return null
   }
 }
 
-export async function listTeams({ q, tier } = {}) {
+export async function listTeams({ q, tier, signal } = {}) {
   try {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (tier) params.set('tier', tier)
     const qs = params.toString() ? `?${params}` : ''
-    const json = await getJSON(`/teams${qs}`, { timeout: 4000 })
+    const json = await getJSON(`/teams${qs}`, { timeout: 4000, signal })
     return { teams: json.teams, live: true }
   } catch {
     // Demo fallback has no tournament data to classify by tier, so the
@@ -115,21 +122,21 @@ export async function listTeams({ q, tier } = {}) {
   }
 }
 
-export async function getTeamProfile(teamId, { year } = {}) {
+export async function getTeamProfile(teamId, { year, signal } = {}) {
   try {
     const qs = year ? `?${new URLSearchParams({ year: String(year) })}` : ''
-    return { profile: await getJSON(`/teams/${teamId}/profile${qs}`, { timeout: 5000 }), live: true }
+    return { profile: await getJSON(`/teams/${teamId}/profile${qs}`, { timeout: 5000, signal }), live: true }
   } catch {
     return { profile: demoTeamProfiles[teamId] || null, live: false }
   }
 }
 
-export async function getTeamMapLeaders(teamId, mapName) {
-  // No bundled demo equivalent for this — an offline/unreachable backend
+export async function getTeamMapLeaders(teamId, mapName, { signal } = {}) {
+  // No bundled demo equivalent for this: an offline/unreachable backend
   // means this feature just isn't available rather than showing invented
   // per-map leaders.
   try {
-    return await getJSON(`/teams/${teamId}/map-leaders?${new URLSearchParams({ map: mapName })}`, { timeout: 8000 })
+    return await getJSON(`/teams/${teamId}/map-leaders?${new URLSearchParams({ map: mapName })}`, { timeout: 8000, signal })
   } catch {
     return null
   }
@@ -140,49 +147,49 @@ export async function getTeamMapLeaders(teamId, mapName) {
 // it's requested — see backend/app/main.py's lru_cache comment) — 8s, not
 // the 4-5s used elsewhere, is deliberate headroom for that cold-cache case
 // rather than a copy-paste of the other timeouts.
-export async function getTeamRadar(teamId, compareWith) {
+export async function getTeamRadar(teamId, compareWith, { signal } = {}) {
   try {
     const params = compareWith ? `?${new URLSearchParams({ compare_with: String(compareWith) })}` : ''
-    return await getJSON(`/teams/${teamId}/radar${params}`, { timeout: 8000 })
+    return await getJSON(`/teams/${teamId}/radar${params}`, { timeout: 8000, signal })
   } catch {
     return null
   }
 }
 
-export async function getPlayerRadar(name, compareWith) {
+export async function getPlayerRadar(name, compareWith, { signal } = {}) {
   try {
     const params = new URLSearchParams({ name })
     if (compareWith) params.set('compare_with', compareWith)
-    return await getJSON(`/players/radar?${params}`, { timeout: 8000 })
+    return await getJSON(`/players/radar?${params}`, { timeout: 8000, signal })
   } catch {
     return null
   }
 }
 
-export async function getOverview() {
+export async function getOverview({ signal } = {}) {
   try {
-    return await getJSON('/stats/overview', { timeout: 5000 })
+    return await getJSON('/stats/overview', { timeout: 5000, signal })
   } catch {
     return demoOverview
   }
 }
 
-export async function getMeta({ year, map } = {}) {
+export async function getMeta({ year, map, signal } = {}) {
   try {
     const params = new URLSearchParams()
     if (year) params.set('year', String(year))
     if (map) params.set('map', map)
     const qs = params.toString() ? `?${params}` : ''
-    return await getJSON(`/stats/meta${qs}`, { timeout: 4000 })
+    return await getJSON(`/stats/meta${qs}`, { timeout: 4000, signal })
   } catch {
     return demoMeta
   }
 }
 
-export async function getPlayersLeaderboard({ metric = 'acs', limit = 20, minMaps = 10 } = {}) {
+export async function getPlayersLeaderboard({ metric = 'acs', limit = 20, minMaps = 10, signal } = {}) {
   try {
     const params = new URLSearchParams({ metric, limit: String(limit), min_maps: String(minMaps) })
-    const json = await getJSON(`/players/leaderboard?${params}`, { timeout: 4000 })
+    const json = await getJSON(`/players/leaderboard?${params}`, { timeout: 4000, signal })
     return { players: json.players, live: true }
   } catch {
     // Bundled demo data only has ACS/rating for a handful of players — no
@@ -196,9 +203,9 @@ export async function getPlayersLeaderboard({ metric = 'acs', limit = 20, minMap
   }
 }
 
-export async function searchPlayers(query) {
+export async function searchPlayers(query, { signal } = {}) {
   try {
-    const json = await getJSON(`/players/search?q=${encodeURIComponent(query)}`, { timeout: 3000 })
+    const json = await getJSON(`/players/search?q=${encodeURIComponent(query)}`, { timeout: 3000, signal })
     return json.players
   } catch {
     // offline fallback — search across names we already have bundled locally
@@ -215,9 +222,11 @@ export async function searchPlayers(query) {
   }
 }
 
-export async function simulateRoster(namesA, namesB) {
+export async function simulateRoster(namesA, namesB, { signal } = {}) {
   const params = new URLSearchParams({ team_a: namesA.join(','), team_b: namesB.join(',') })
-  const res = await fetch(`${API_BASE}/roster-builder/simulate?${params}`, { signal: AbortSignal.timeout(6000) })
+  const timeoutSignal = AbortSignal.timeout(6000)
+  const combined = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
+  const res = await fetch(`${API_BASE}/roster-builder/simulate?${params}`, { signal: combined })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'request failed' }))
     throw new Error(err.detail || 'request failed')

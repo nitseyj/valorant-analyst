@@ -1,3 +1,7 @@
 # Add these to backend/requirements.txt (per the project's planned tech stack)
 fastapi
 uvicorn[standard]
+
+# Testing only (backend/tests/)
+pytest
+httpx

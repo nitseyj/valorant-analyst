@@ -512,21 +512,24 @@ export default function Home({ onOpenMatch, onOpenTeam, onNavigate, onOpenPalett
 
   useEffect(() => {
     let cancelled = false
-    getOverview().then((data) => {
+    const controller = new AbortController()
+    const { signal } = controller
+    getOverview({ signal }).then((data) => {
       if (!cancelled) setStats(data)
     })
-    getMeta().then((data) => {
+    getMeta({ signal }).then((data) => {
       if (!cancelled) setMeta(data)
     })
-    listMatches({ limit: 30 }).then(async ({ matches }) => {
+    listMatches({ limit: 30, signal }).then(async ({ matches }) => {
       if (cancelled) return
       setMatches(matches)
       const pool = matches.slice(0, 5)
-      const verdicts = (await Promise.all(pool.map(async (m) => (await getMatchVerdict(m.match_id)).verdict))).filter(Boolean)
+      const verdicts = (await Promise.all(pool.map(async (m) => (await getMatchVerdict(m.match_id, { signal })).verdict))).filter(Boolean)
       if (!cancelled) setHighlights(verdicts)
     })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [])
 
