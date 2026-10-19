@@ -296,10 +296,25 @@ show a player's historically best-performing agent as original stylized art,
 not a photograph of the player, and fall back to an abstract silhouette when
 no agent is known. The agent and map artwork is original AI-generated
 illustration in an independent style. It is not real screenshots, in-game
-callouts, or Riot character art. The team logos under
-`frontend/prototype/assets/valorant/teams/` are the one set of real images in
-the repository. Confirm your own rights to them before publishing a fork. See
-the Assets section above.
+callouts, or Riot character art.
+
+### Team logos are not covered by the MIT license
+
+The team logos under `frontend/prototype/assets/valorant/teams/` are the one
+set of real images in this repository, and they are each the trademark of the
+esports organisation they identify, not of this project. They are not
+licensed under the MIT grant above: including them in this repository is not
+a claim of ownership over them. They are used only to identify the real
+teams a match or profile is about (nominative use), on a free, non-commercial
+site, never to suggest that an organisation endorses or sponsors this
+project. If you fork this project for your own public use, confirm your own
+rights to redistribute these specific logos first, or replace them: every
+team without a logo file already falls back to a generated initials badge
+(see the frontend README's Assets section).
+
+### Non-commercial, and not affiliated with Riot Games
 
 VALORANT is a trademark of Riot Games, Inc. This project is not affiliated
-with or endorsed by Riot Games.
+with, endorsed by, or sponsored by Riot Games or any of the teams, players,
+or organisations it displays data about. It is free to use, carries no
+advertising, and is not sold or offered as a paid service.

@@ -47,4 +47,8 @@ console or server error messages.
 ## Licence
 
 By contributing, you agree that your contribution is licensed under the MIT
-licence in [`LICENSE`](LICENSE).
+licence in [`LICENSE`](LICENSE). Do not add further real third-party
+trademarked assets (team logos, official art, player photos) without
+confirming your rights to redistribute them first: see the License section
+of the root README for why the existing team logos are a deliberate, scoped
+exception rather than the norm.

@@ -6,6 +6,17 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Documentation
+
+- **License:** the MIT grant now explicitly excludes the real team logos
+  under `frontend/prototype/assets/valorant/teams/`, which are third-party
+  trademarks used under nominative fair use, not this project's to license.
+  Added to `LICENSE`, the root README, the frontend README, and
+  `CONTRIBUTING.md`.
+- **README:** states plainly that the project is non-commercial, free, and
+  carries no advertising, alongside the existing "not affiliated with Riot"
+  disclaimer.
+
 ### Added (third revision)
 
 - **Testing:** a Playwright smoke suite (`frontend/web/tests/`) covering

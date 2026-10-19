@@ -141,7 +141,8 @@ characters replaced with a hyphen. For example, "Paper Rex" becomes
   image fails to load.
 - **Team logos are the one place real images are used.** They load from
   `public/assets/valorant/teams/` when present, and otherwise fall back to
-  an initials badge.
+  an initials badge. These are third-party trademarks, not covered by this
+  project's MIT license: see the root README's License section.
 - **No fabricated statistics.** Every number on screen traces back to an API
   field or a bundled real demo payload. Panels that the dataset cannot
   support, such as regional breakdowns or video clips, are not included.
