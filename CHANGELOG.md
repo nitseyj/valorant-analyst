@@ -6,6 +6,27 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Added (ninth revision)
+
+- **Motion:** `useRevealOnScroll` (`lib/hooks.js`) reveals a long list the
+  moment it actually scrolls into view, instead of animating on mount where
+  a list past the fold (Teams, Matches, Players) finished its entrance
+  before anyone had scrolled far enough to see it. Every existing `rise-in`
+  element keeps its own per-item delay unchanged; the hook just gates when
+  the group is allowed to start, via a paused/running `animation-play-state`
+  toggle (see `.reveal-group` in `index.css`).
+- **Motion:** `useAnimatedValues` tweens RadarChart's polygon between shapes
+  when the compared team or player changes, instead of snapping. Fixing
+  this exposed a real prerequisite bug: Players' and TeamProfile's radar
+  state reset to `undefined` (showing a skeleton) on every comparison
+  change, unmounting RadarChart entirely and leaving nothing to tween from.
+  Both now keep the previous shape on screen while the new one loads
+  (stale while revalidating) instead of flashing a skeleton each time.
+- **Motion:** `useFlipReorder` animates sorted rows gliding to their new
+  position (a FLIP: First, Last, Invert, Play) instead of jumping there,
+  on the Teams table (sort by column) and the Players leaderboard
+  (change ranking metric).
+
 ### Changed (eighth revision)
 
 - **Home:** the match replay's chart now draws smooth curves (bezier

@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import PlayerPortrait from './PlayerPortrait'
+import { useAnimatedValues } from '../lib/hooks'
 
 // Generic N-axis ("pentagon") comparison chart. Each axis's plotted
 // position is the `normalized` (0-1) value the backend computed from the
@@ -7,16 +9,23 @@ import PlayerPortrait from './PlayerPortrait'
 // "power score". The real value + unit for each axis is always shown
 // alongside the shape, not just the chart position, so nothing is hidden
 // behind a normalized coordinate.
-function polygonPoints(axes, cx, cy, radius) {
-  const n = axes.length
-  return axes
-    .map((axis, i) => {
+//
+// `values` here is a plain array of (possibly mid-tween) 0-1 numbers from
+// useAnimatedValues, not the axis objects directly — switching who you're
+// comparing against morphs the shape instead of snapping to it.
+function polygonPoints(values, cx, cy, radius) {
+  const n = values.length
+  return values
+    .map((f, i) => {
       const angle = -Math.PI / 2 + i * ((2 * Math.PI) / n)
-      const f = axis.normalized ?? 0
       return `${cx + radius * f * Math.cos(angle)},${cy + radius * f * Math.sin(angle)}`
     })
     .join(' ')
 }
+
+// A stable reference (not a fresh `[]` literal on every render) so the
+// useMemo calls below that fall back to it don't invalidate themselves.
+const EMPTY_AXES = []
 
 function gridRing(n, cx, cy, radius, fraction) {
   return Array.from({ length: n }, (_, i) => {
@@ -49,8 +58,14 @@ function SideCard({ series, color }) {
 }
 
 export default function RadarChart({ a, b, colorA = 'var(--color-brand)', colorB = 'var(--color-team-b)', size = 280 }) {
-  if (!a || !a.axes || a.axes.length === 0) return null
-  const axes = a.axes
+  const axes = a?.axes ?? EMPTY_AXES
+  const aTargets = useMemo(() => axes.map((x) => x.normalized ?? 0), [axes])
+  const bAxes = b?.axes ?? null
+  const bTargets = useMemo(() => (bAxes ?? axes).map((x) => x?.normalized ?? 0), [bAxes, axes])
+  const aAnimated = useAnimatedValues(aTargets)
+  const bAnimated = useAnimatedValues(bTargets)
+
+  if (!a || axes.length === 0) return null
   const n = axes.length
   const cx = size / 2
   const cy = size / 2
@@ -92,9 +107,9 @@ export default function RadarChart({ a, b, colorA = 'var(--color-brand)', colorB
             })}
 
             {bComplete && (
-              <polygon points={polygonPoints(b.axes, cx, cy, radius)} fill={colorB} fillOpacity="0.16" stroke={colorB} strokeWidth="1.6" strokeLinejoin="round" />
+              <polygon points={polygonPoints(bAnimated, cx, cy, radius)} fill={colorB} fillOpacity="0.16" stroke={colorB} strokeWidth="1.6" strokeLinejoin="round" />
             )}
-            {aComplete && <polygon points={polygonPoints(axes, cx, cy, radius)} fill={colorA} fillOpacity="0.18" stroke={colorA} strokeWidth="1.6" strokeLinejoin="round" />}
+            {aComplete && <polygon points={polygonPoints(aAnimated, cx, cy, radius)} fill={colorA} fillOpacity="0.18" stroke={colorA} strokeWidth="1.6" strokeLinejoin="round" />}
 
             {axes.map((axis, i) => {
               const angle = -Math.PI / 2 + i * ((2 * Math.PI) / n)

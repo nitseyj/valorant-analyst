@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listTeams } from '../lib/api'
-import { useCountUp, useDebouncedValue, useSlashToFocus, useTilt } from '../lib/hooks'
+import { useCountUp, useDebouncedValue, useFlipReorder, useRevealOnScroll, useSlashToFocus, useTilt } from '../lib/hooks'
 import { SearchIcon } from '../components/icons'
 import { Label, EmptyState, Skeleton, Panel, SectionHeader } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -116,6 +116,7 @@ function TeamCard({ team, rank, delay, onOpen, compared, compareDisabled, onComp
 // Sortable table. Column headers are real buttons with aria-sort, so keyboard
 // and screen reader users get the same sorting as mouse users.
 function TeamTable({ teams, sortKey, onSort, rankOn, onOpen, compareIds, onCompare }) {
+  const flipRef = useFlipReorder()
   const columns = [
     { key: 'name', label: 'Team' },
     { key: 'wins', label: 'W', align: 'right' },
@@ -153,7 +154,12 @@ function TeamTable({ teams, sortKey, onSort, rankOn, onOpen, compareIds, onCompa
             const losses = t.matches - t.wins
             const compared = compareIds.includes(t.team_id)
             return (
-              <tr key={t.team_id} className="rise-in border-t border-line-soft hover:bg-panel-raised transition-colors" style={{ animationDelay: `${Math.min(i * 25, 500)}ms` }}>
+              <tr
+                key={t.team_id}
+                ref={flipRef(t.team_id)}
+                className="rise-in border-t border-line-soft hover:bg-panel-raised transition-colors"
+                style={{ animationDelay: `${Math.min(i * 25, 500)}ms` }}
+              >
                 {rankOn && <td className="py-3 px-4 font-mono text-xs text-ink-faint tabular-nums">{i + 1}</td>}
                 <td className="py-3 px-4">
                   <button type="button" onClick={() => onOpen(t.team_id)} className="flex items-center gap-3 min-w-0 min-h-[36px] text-left">
@@ -345,6 +351,7 @@ export default function Teams({ onOpenTeam }) {
   const [known, setKnown] = useState({})
   const searchRef = useRef(null)
   useSlashToFocus(searchRef)
+  const { ref: revealRef, revealed } = useRevealOnScroll()
 
   useEffect(() => {
     if (teams) setKnown((prev) => ({ ...prev, ...Object.fromEntries(teams.map((t) => [t.team_id, t])) }))
@@ -516,7 +523,7 @@ export default function Teams({ onOpenTeam }) {
       )}
 
       {sorted && sorted.length > 0 && view === 'cards' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div ref={revealRef} className={`reveal-group ${revealed ? 'is-revealed' : ''} grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4`}>
           {sorted.map((t, i) => (
             <TeamCard
               key={t.team_id}
@@ -532,10 +539,14 @@ export default function Teams({ onOpenTeam }) {
         </div>
       )}
       {sorted && sorted.length > 0 && view === 'table' && (
-        <TeamTable teams={sorted} sortKey={sortKey} onSort={sortBy} rankOn={rankOn} onOpen={onOpenTeam} compareIds={compareIds} onCompare={toggleCompare} />
+        <div ref={revealRef} className={`reveal-group ${revealed ? 'is-revealed' : ''}`}>
+          <TeamTable teams={sorted} sortKey={sortKey} onSort={sortBy} rankOn={rankOn} onOpen={onOpenTeam} compareIds={compareIds} onCompare={toggleCompare} />
+        </div>
       )}
       {sorted && sorted.length > 0 && view === 'scatter' && (
-        <TeamScatter teams={sorted} compareIds={compareIds} onOpen={onOpenTeam} />
+        <div ref={revealRef} className={`reveal-group ${revealed ? 'is-revealed' : ''}`}>
+          <TeamScatter teams={sorted} compareIds={compareIds} onOpen={onOpenTeam} />
+        </div>
       )}
     </div>
   )

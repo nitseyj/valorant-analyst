@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listMatches, getMatchVerdict } from '../lib/api'
 import { impactColor, matchScoreStr } from '../lib/format'
-import { useCountUp, useDebouncedValue, useSlashToFocus } from '../lib/hooks'
+import { useCountUp, useDebouncedValue, useRevealOnScroll, useSlashToFocus } from '../lib/hooks'
 import { SearchIcon, ChevronRightIcon, CategoryIcon } from '../components/icons'
 import { Label, EmptyState, Skeleton, Tag, Button, ImpactBar } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -261,6 +261,13 @@ export default function Matches({ onOpenMatch }) {
   const [peekData, setPeekData] = useState({})
   const searchRef = useRef(null)
   const listRef = useRef(null)
+  const { ref: revealRef, revealed } = useRevealOnScroll()
+  // listRef is read imperatively for keyboard navigation (querySelectorAll),
+  // revealRef is the scroll-reveal callback ref: both need the same node.
+  function setListNode(el) {
+    listRef.current = el
+    revealRef(el)
+  }
 
   const debouncedQuery = useDebouncedValue(query, 250)
 
@@ -531,13 +538,13 @@ export default function Matches({ onOpenMatch }) {
       {shown && shown.length === 0 && <EmptyState>No matches found for this search and filter.</EmptyState>}
 
       {shown && shown.length > 0 && view === 'list' && (
-        <div ref={listRef} onKeyDown={onListKeyDown} className="flex flex-col gap-2.5">
+        <div ref={setListNode} onKeyDown={onListKeyDown} className={`reveal-group ${revealed ? 'is-revealed' : ''} flex flex-col gap-2.5`}>
           {shown.map((m, i) => renderCard(m, i))}
         </div>
       )}
 
       {shown && shown.length > 0 && view === 'event' && (
-        <div ref={listRef} onKeyDown={onListKeyDown} className="flex flex-col gap-8">
+        <div ref={setListNode} onKeyDown={onListKeyDown} className={`reveal-group ${revealed ? 'is-revealed' : ''} flex flex-col gap-8`}>
           {groups.map(([event, items]) => {
             const sweeps = items.filter((m) => outcomeOf(m) === 'sweep').length
             const close = items.filter((m) => outcomeOf(m) === 'close').length

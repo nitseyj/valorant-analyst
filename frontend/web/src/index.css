@@ -180,6 +180,18 @@
   .rise-in {
     animation: rise-in 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   }
+  /* Gates every rise-in descendant on scroll visibility (see useRevealOnScroll
+     in lib/hooks.js) without touching any of their individual animationDelay
+     values: paused holds each one at its "from" frame (opacity 0), and
+     switching to running lets its own delay and animation play out exactly
+     as authored, just starting from the moment the group scrolls into view
+     instead of from mount. */
+  .reveal-group .rise-in {
+    animation-play-state: paused;
+  }
+  .reveal-group.is-revealed .rise-in {
+    animation-play-state: running;
+  }
   .grow-x {
     transform-origin: left center;
     animation: grow-x 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;

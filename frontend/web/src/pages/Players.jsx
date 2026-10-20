@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getPlayersLeaderboard, getPlayerRadar, searchPlayers } from '../lib/api'
-import { useCountUp, useDebouncedValue } from '../lib/hooks'
+import { useCountUp, useDebouncedValue, useFlipReorder, useRevealOnScroll } from '../lib/hooks'
 import { Panel, Label, SectionHeader, Button, EmptyState, LoadingState, Skeleton } from '../components/ui'
 import PlayerPortrait from '../components/PlayerPortrait'
 import RadarChart from '../components/RadarChart'
@@ -326,6 +326,8 @@ export default function Players() {
   const [selected, setSelected] = useState([])
   const [radar, setRadar] = useState(undefined) // undefined = loading, null = failed
   const [radarRetry, setRadarRetry] = useState(0)
+  const { ref: revealRef, revealed } = useRevealOnScroll()
+  const flipRef = useFlipReorder()
 
   useEffect(() => {
     let cancelled = false
@@ -347,7 +349,12 @@ export default function Players() {
     }
     let cancelled = false
     const controller = new AbortController()
-    setRadar(undefined)
+    // Deliberately not resetting to undefined here: keeps the previous
+    // comparison's shape on screen while the new one loads (stale while
+    // revalidating), instead of flashing a skeleton on every change. It also
+    // means RadarChart never unmounts between comparisons, so its polygon
+    // can actually morph to the new shape instead of mounting fresh with
+    // nothing to tween from.
     getPlayerRadar(selected[0].name, selected[1]?.name, { signal: controller.signal }).then((data) => {
       if (!cancelled) setRadar(data)
     })
@@ -506,7 +513,7 @@ export default function Players() {
         <>
           <Podium top={players.slice(0, 3)} metric={metric} selected={selected} onToggle={toggleSelected} />
           <Panel className="p-3 md:p-5">
-            <ol className="flex flex-col">
+            <ol ref={revealRef} className={`reveal-group ${revealed ? 'is-revealed' : ''} flex flex-col`}>
               {players.map((p, i) => {
                 const on = isSelected(p.name)
                 const share = maxValue > 0 && p.value != null ? (p.value / maxValue) * 100 : 0
@@ -515,6 +522,7 @@ export default function Players() {
                 return (
                   <li
                     key={p.name}
+                    ref={flipRef(p.name)}
                     className={`rise-in relative flex items-center gap-3 md:gap-4 overflow-hidden px-2 md:px-4 py-3.5 border-t border-line-soft first:border-t-0 transition-colors ${
                       on ? 'bg-brand-dim' : 'hover:bg-panel-raised'
                     }`}

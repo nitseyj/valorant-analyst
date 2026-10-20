@@ -248,13 +248,18 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
   const [radarRetry, setRadarRetry] = useState(0)
 
   // TeamProfile is not remounted between teams (App.jsx sets no key), so the
-  // team-scoped UI state is reset during render when the team changes.
+  // team-scoped UI state is reset during render when the team changes. Radar
+  // resets here too (a genuinely different team), but not inside the radar
+  // effect below (switching who you're comparing against, within the same
+  // team, keeps the previous shape on screen so it can morph to the new one
+  // instead of unmounting RadarChart and losing its tween state).
   const [trackedTeamId, setTrackedTeamId] = useState(teamId)
   if (teamId !== trackedTeamId) {
     setTrackedTeamId(teamId)
     setYear(null)
     setExpandedMap(null)
     setCompareWith(null)
+    setRadar(undefined)
   }
 
   useEffect(() => {
@@ -285,7 +290,6 @@ export default function TeamProfile({ teamId, onOpenMatch }) {
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
-    setRadar(undefined)
     getTeamRadar(teamId, compareWith, { signal: controller.signal }).then((data) => {
       if (!cancelled) setRadar(data)
     })
