@@ -6,6 +6,15 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Changed (eighth revision)
+
+- **Home:** the match replay's chart now draws smooth curves (bezier
+  through each round's data point) instead of a straight-segment polyline,
+  with a soft gradient fill under each line, dashed reference gridlines,
+  round-number ticks, and a live value label at the end of each curve. The
+  straight-line version read as a jagged, cluttered zigzag once the two
+  teams' lines crossed a few times.
+
 ### Added (seventh revision)
 
 - **Shortcuts overlay:** pressing `?` anywhere (outside a text field) opens

@@ -227,45 +227,130 @@ function cumulativeWins(rounds) {
   return { aSeries, bSeries }
 }
 
+// A smooth curve through a cumulative-wins series: each round-to-round step
+// becomes a gentle S-curve (bezier control points at the segment's midpoint
+// x) instead of a sharp angle, which is what made two crossing lines read as
+// a jagged zigzag rather than a readable shape.
+function smoothPath(points) {
+  if (points.length === 0) return ''
+  let d = `M ${points[0][0]},${points[0][1]}`
+  for (let i = 1; i < points.length; i++) {
+    const [x0, y0] = points[i - 1]
+    const [x1, y1] = points[i]
+    const cx = (x0 + x1) / 2
+    d += ` C ${cx.toFixed(1)},${y0.toFixed(1)} ${cx.toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+  }
+  return d
+}
+
+// The same curve, closed down to the baseline, for a soft gradient fill
+// under the line instead of a bare stroke floating on empty panel.
+function smoothAreaPath(points, baselineY) {
+  if (points.length === 0) return ''
+  const [firstX] = points[0]
+  const [lastX] = points[points.length - 1]
+  return `${smoothPath(points)} L ${lastX.toFixed(1)},${baselineY} L ${firstX.toFixed(1)},${baselineY} Z`
+}
+
 // A read-only race chart driven by the clock rather than the pointer: it
-// only ever shows the rounds "revealed" so far, so the line visibly builds
-// left to right as the replay plays.
+// only ever shows the rounds "revealed" so far, so the curve visibly builds
+// left to right as the replay plays. Gridlines and round ticks give the eye
+// fixed reference points, so two crossing curves read as a shape rather than
+// noise, and each line ends in its own live value instead of a bare dot.
 function ReplayChart({ rounds, revealed, teamA, teamB }) {
   const w = 560
-  const h = 120
-  const left = 8
-  const right = 8
-  const top = 10
-  const bottom = 10
+  const h = 156
+  const left = 10
+  const right = 30
+  const top = 16
+  const bottom = 24
   const innerW = w - left - right
   const innerH = h - top - bottom
   const n = rounds.length
   const shown = rounds.slice(0, revealed)
   const { aSeries, bSeries } = cumulativeWins(shown)
   const yMax = Math.max(1, aSeries[aSeries.length - 1], bSeries[bSeries.length - 1])
+  const baseline = top + innerH
   const x = (i) => left + (n > 0 ? (i / n) * innerW : 0)
-  const y = (v) => top + innerH - (v / yMax) * innerH
-  const line = (series) => series.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+  const y = (v) => baseline - (v / yMax) * innerH
+  const points = (series) => series.map((v, i) => [x(i), y(v)])
   const aNow = aSeries[aSeries.length - 1] ?? 0
   const bNow = bSeries[bSeries.length - 1] ?? 0
+
+  // Keep the two end labels from overlapping when the scores are close.
+  let aLabelY = y(aNow)
+  let bLabelY = y(bNow)
+  if (Math.abs(aLabelY - bLabelY) < 14) {
+    if (aLabelY <= bLabelY) {
+      aLabelY -= 7
+      bLabelY += 7
+    } else {
+      aLabelY += 7
+      bLabelY -= 7
+    }
+  }
+
+  const tickEvery = n > 16 ? 5 : n > 8 ? 2 : 1
+  const ticks = n > 0 ? Array.from({ length: Math.floor(n / tickEvery) + 1 }, (_, i) => i * tickEvery).filter((t) => t <= n) : []
+
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
-      className="w-full h-auto"
+      className="w-full h-auto overflow-visible"
       role="img"
       aria-label={`Replay in progress: ${teamA} ${aNow}, ${teamB} ${bNow}, after round ${revealed} of ${n}.`}
     >
-      <line x1={left} x2={w - right} y1={top + innerH} y2={top + innerH} stroke="var(--color-line-soft)" />
+      <defs>
+        <linearGradient id="replay-fill-a" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--color-brand)" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="var(--color-brand)" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="replay-fill-b" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--color-team-b)" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="var(--color-team-b)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {[0.33, 0.66].map((f) => (
+        <line
+          key={f}
+          x1={left}
+          x2={left + innerW}
+          y1={top + innerH * f}
+          y2={top + innerH * f}
+          stroke="var(--color-line-soft)"
+          strokeDasharray="2 4"
+        />
+      ))}
+      <line x1={left} x2={left + innerW} y1={baseline} y2={baseline} stroke="var(--color-line-soft)" />
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={x(t)} x2={x(t)} y1={baseline} y2={baseline + 3} stroke="var(--color-line-soft)" />
+          <text x={x(t)} y={baseline + 15} textAnchor="middle" fontSize="9" fontFamily="IBM Plex Mono" fill="var(--color-ink-faint)">
+            {t}
+          </text>
+        </g>
+      ))}
+
       {n > 0 && (
         <>
-          <polyline points={line(aSeries)} fill="none" stroke="var(--color-brand)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-          <polyline points={line(bSeries)} fill="none" stroke="var(--color-team-b)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={smoothAreaPath(points(bSeries), baseline)} fill="url(#replay-fill-b)" />
+          <path d={smoothAreaPath(points(aSeries), baseline)} fill="url(#replay-fill-a)" />
+          <path d={smoothPath(points(bSeries))} fill="none" stroke="var(--color-team-b)" strokeWidth="2.5" strokeLinecap="round" />
+          <path d={smoothPath(points(aSeries))} fill="none" stroke="var(--color-brand)" strokeWidth="2.5" strokeLinecap="round" />
         </>
       )}
+
       {revealed > 0 && (
         <>
-          <circle cx={x(aSeries.length - 1)} cy={y(aNow)} r="4.5" fill="var(--color-brand)" stroke="var(--color-panel)" strokeWidth="2" />
-          <circle cx={x(bSeries.length - 1)} cy={y(bNow)} r="4.5" fill="var(--color-team-b)" stroke="var(--color-panel)" strokeWidth="2" />
+          <circle cx={x(bSeries.length - 1)} cy={y(bNow)} r="4" fill="var(--color-team-b)" stroke="var(--color-panel-raised)" strokeWidth="2" />
+          <circle cx={x(aSeries.length - 1)} cy={y(aNow)} r="4" fill="var(--color-brand)" stroke="var(--color-panel-raised)" strokeWidth="2" />
+          <text x={x(bSeries.length - 1) + 9} y={bLabelY + 4} fontSize="13" fontWeight="700" fontFamily="IBM Plex Mono" fill="var(--color-team-b)">
+            {bNow}
+          </text>
+          <text x={x(aSeries.length - 1) + 9} y={aLabelY + 4} fontSize="13" fontWeight="700" fontFamily="IBM Plex Mono" fill="var(--color-brand)">
+            {aNow}
+          </text>
         </>
       )}
     </svg>
