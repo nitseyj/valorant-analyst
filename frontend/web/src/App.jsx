@@ -2,7 +2,7 @@ import { useEffect, useState, Suspense, lazy } from 'react'
 import { flushSync } from 'react-dom'
 import Sidebar from './components/Sidebar'
 import ErrorBoundary from './components/ErrorBoundary'
-import { LoadingState } from './components/ui'
+import { LoadingState, BackToTop } from './components/ui'
 import { prefersReducedMotion } from './lib/hooks'
 import Home from './pages/Home'
 
@@ -141,6 +141,7 @@ export default function App() {
           <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />
         </Suspense>
       )}
+      <BackToTop />
     </div>
   )
 }

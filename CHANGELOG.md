@@ -8,6 +8,9 @@ not yet use version numbers.
 
 ### Added
 
+- **Navigation:** a "back to top" button appears after scrolling past the
+  fold on any page and smooth-scrolls back to the top on click. Mounted once
+  globally, so it just stays hidden on pages that never scroll that far.
 - **Motion:** Match Verdict's header now plays a broadcast-style versus
   entrance: the two team names slide in from opposite sides and the score
   pops in once they meet, replaying on every match switch (keyed on
@@ -178,6 +181,18 @@ not yet use version numbers.
 
 ### Fixed
 
+- Match Verdict and a team's per-map leaders panel both used `null` for two
+  different meanings at once: "still loading" and "failed to load / no data
+  available." A genuine failure was therefore indistinguishable from still
+  loading, and either panel got stuck on its skeleton forever instead of
+  reaching the real failure message (Match Verdict's already had a Retry
+  button written for it; it was just unreachable). Both now follow the same
+  `undefined` = loading, `null` = failed convention already used elsewhere
+  in the app (the team and player radar panels), and Match Verdict's failure
+  message now has a working Retry button.
+- `--color-ink-faint`, used for small mono labels and captions throughout,
+  measured below WCAG AA contrast (4.5:1) against the page background and
+  panel surfaces. Lightened to clear AA on both with margin to spare.
 - Economy tracker: VCT 2026 series have no loadout values in the source data.
   The tracker now plots remaining credits for them, labelled as such, instead
   of an empty chart. The timeline endpoint returns both values.

@@ -3,7 +3,7 @@ import { getMatchVerdict, getTimeline, getMatchGames } from '../lib/api'
 import { extractMvp, impactColor } from '../lib/format'
 import { useCountUp } from '../lib/hooks'
 import { CategoryIcon, TrophyIcon } from '../components/icons'
-import { Panel, Label, SectionHeader, ImpactBar, ExpandableRow, Pips, MapScoreLine, Tag, LoadingState, EmptyState } from '../components/ui'
+import { Panel, Label, SectionHeader, ImpactBar, ExpandableRow, Pips, MapScoreLine, Tag, LoadingState, EmptyState, Button } from '../components/ui'
 import EvidenceRow from '../components/EvidenceRow'
 import PlayerStatRow from '../components/PlayerStatRow'
 import TeamBadge from '../components/TeamBadge'
@@ -151,19 +151,25 @@ function Lineup({ team, players, color }) {
 }
 
 export default function MatchVerdict({ matchId }) {
-  const [m, setM] = useState(null)
+  // undefined = loading, null = failed (no live backend and no bundled demo
+  // for this id) - distinct states, since getMatchVerdict can itself resolve
+  // to a null verdict on failure. Collapsing them into one `null` meant a
+  // genuine failure was indistinguishable from "still loading" and the page
+  // showed a skeleton forever instead of the message below.
+  const [m, setM] = useState(undefined)
   const [timeline, setTimeline] = useState(null)
   const [focusRank, setFocusRank] = useState(null)
   const [activeSection, setActiveSection] = useState('factors')
   const [mapPick, setMapPick] = useState(null)
   // Map names come from the match endpoint, which always lists every game.
   const [games, setGames] = useState(null)
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
     const { signal } = controller
-    setM(null)
+    setM(undefined)
     setTimeline(null)
     setGames(null)
     getMatchVerdict(matchId, { signal }).then(({ verdict }) => {
@@ -179,7 +185,7 @@ export default function MatchVerdict({ matchId }) {
       cancelled = true
       controller.abort()
     }
-  }, [matchId])
+  }, [matchId, retry])
 
   // The highlight on a factor card fades after a moment.
   useEffect(() => {
@@ -208,12 +214,15 @@ export default function MatchVerdict({ matchId }) {
   const animatedA = useCountUp(scoreParts[0], 900)
   const animatedB = useCountUp(scoreParts[1], 900)
 
-  if (m === null) return <LoadingState>Loading verdict</LoadingState>
+  if (m === undefined) return <LoadingState>Loading verdict</LoadingState>
   if (!m) {
     return (
       <EmptyState>
         Could not load this match. The backend is unreachable and no bundled data exists for match {matchId}. Start the
         API with <code className="text-ink">uvicorn app.main:app --reload</code> and try again.
+        <div className="mt-3">
+          <Button variant="secondary" onClick={() => setRetry((n) => n + 1)}>Retry</Button>
+        </div>
       </EmptyState>
     )
   }

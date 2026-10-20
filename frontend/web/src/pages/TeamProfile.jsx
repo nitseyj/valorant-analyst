@@ -189,12 +189,17 @@ function OpponentGrid({ opponents, onOpenMatch }) {
 }
 
 function MapLeadersPanel({ teamId, mapName }) {
-  const [leaders, setLeaders] = useState(null)
+  // undefined = loading, null = failed/unavailable - see the same distinction
+  // on MatchVerdict's verdict state. getTeamMapLeaders resolves to null both
+  // on genuine failure and when there's just not enough data for this map,
+  // so both share the "not enough loaded data" message below rather than a
+  // separate retry affordance.
+  const [leaders, setLeaders] = useState(undefined)
 
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
-    setLeaders(null)
+    setLeaders(undefined)
     getTeamMapLeaders(teamId, mapName, { signal: controller.signal }).then((data) => {
       if (!cancelled) setLeaders(data)
     })
@@ -204,7 +209,7 @@ function MapLeadersPanel({ teamId, mapName }) {
     }
   }, [teamId, mapName])
 
-  if (leaders === null) return <Skeleton className="h-16 mt-3" />
+  if (leaders === undefined) return <Skeleton className="h-16 mt-3" />
   if (!leaders || (!leaders.most_kills && !leaders.most_assists && !leaders.most_effective)) {
     return <p className="text-xs text-ink-faint font-mono py-3">Not enough loaded data on {mapName} for this team.</p>
   }

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { RoleGlyph } from './icons'
+import { useEffect, useState } from 'react'
+import { RoleGlyph, ChevronRightIcon } from './icons'
 import { ROLE_COLOR } from '../lib/roles'
 
 // Accepts any CSS colour, including var(--token), which the old `${accent}55`
@@ -216,5 +216,41 @@ export function LoadingState({ children = 'Loading…' }) {
       <Skeleton className="h-3 w-1/2" />
       <span className="sr-only">{children}</span>
     </div>
+  )
+}
+
+// Mounted once (see App.jsx), not per-page: it just stays hidden on any view
+// that never scrolls past the threshold, which is simpler than wiring a
+// scroll container into every long page individually.
+export function BackToTop() {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    let ticking = false
+    function onScroll() {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        setVisible(window.scrollY > 480)
+        ticking = false
+      })
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      aria-label="Back to top"
+      aria-hidden={!visible}
+      tabIndex={visible ? 0 : -1}
+      className={`fixed bottom-6 right-6 z-40 p-3 bg-panel-raised border border-line text-ink-dim cut-corner-sm transition-all duration-300 hover:text-ink hover:border-brand-line ${
+        visible ? 'opacity-90 translate-y-0' : 'opacity-0 translate-y-3 pointer-events-none'
+      }`}
+    >
+      <ChevronRightIcon size={18} style={{ transform: 'rotate(-90deg)' }} />
+    </button>
   )
 }
