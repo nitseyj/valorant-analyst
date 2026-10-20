@@ -121,10 +121,15 @@ control is provided to pause it (the Home ticker).
 
 ## Keyboard shortcuts
 
+Press `?` anywhere in the app (outside a text field) to open this same list
+as an in-app overlay, or click "keyboard shortcuts" at the bottom of the
+sidebar on desktop.
+
 | Key | Where | Action |
 |---|---|---|
 | Ctrl+K (Cmd+K on Mac) | Everywhere | Open or close the command palette |
-| Escape | Palette, search dropdowns | Close the open list |
+| `?` | Everywhere | Open or close the shortcuts overlay |
+| Escape | Palette, shortcuts overlay, search dropdowns | Close the open list |
 | `/` | Teams, Matches, Analytics | Focus the search box (not while typing) |
 | Up and down arrows | Matches list | Move between match cards |
 | Left and right arrows | Team profile roster timeline | Step through roster years |

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listTeams } from '../lib/api'
-import { useCountUp, useDebouncedValue, useSlashToFocus } from '../lib/hooks'
+import { useCountUp, useDebouncedValue, useSlashToFocus, useTilt } from '../lib/hooks'
 import { SearchIcon } from '../components/icons'
 import { Label, EmptyState, Skeleton, Panel, SectionHeader } from '../components/ui'
 import TeamBadge from '../components/TeamBadge'
@@ -67,14 +67,19 @@ function CompareToggle({ compared, disabled, onClick, name }) {
 function TeamCard({ team, rank, delay, onOpen, compared, compareDisabled, onCompare }) {
   const losses = team.matches - team.wins
   const featured = rank != null && rank <= 3
+  const { ref: tiltRef, onPointerMove, onPointerLeave } = useTilt({ maxX: 6, maxY: 8 })
   return (
     <div
       className={`rise-in group relative overflow-hidden flex flex-col cut-corner-sm bg-panel [content-visibility:auto] [contain-intrinsic-size:auto_240px] ${
         featured ? 'shadow-[inset_0_0_0_1px_var(--color-brand-line)]' : 'shadow-[inset_0_0_0_1px_var(--color-line)]'
       }`}
       style={{ animationDelay: `${delay}ms` }}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
     >
-      <TeamWatermark name={team.name} size={260} reveal className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+      <div ref={tiltRef} className="absolute inset-0 transition-transform duration-200 ease-out will-change-transform pointer-events-none">
+        <TeamWatermark name={team.name} size={260} reveal className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+      </div>
       <button
         type="button"
         onClick={onOpen}

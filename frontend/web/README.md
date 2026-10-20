@@ -60,6 +60,7 @@ src/
     Sidebar.jsx       Navigation, with a Back button
     ErrorBoundary.jsx A render error in one page shows a scoped fallback instead of blanking the app
     CommandPalette.jsx  Ctrl+K search across teams, matches, and pages
+    ShortcutsOverlay.jsx  "?" opens a reference of every keyboard shortcut
     MapAtlas.jsx      Home: all twelve maps with pointer tilt and a detail panel
     GameLineups.jsx   Match verdict: each team's players and agents on one map
     TeamWatermark.jsx Large, faded, cropped team logo behind a panel

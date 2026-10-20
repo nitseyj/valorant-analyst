@@ -6,6 +6,34 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Added (seventh revision)
+
+- **Shortcuts overlay:** pressing `?` anywhere (outside a text field) opens
+  an in-app reference of every keyboard shortcut, kept in sync with the
+  root README's table by hand. Also reachable from a new link at the bottom
+  of the sidebar on desktop.
+- **`robots.txt`:** allows all crawlers. No `sitemap.xml`: this is a
+  single-page app with exactly one crawlable URL, so a sitemap would add a
+  file for no benefit.
+
+### Added (sixth revision)
+
+- **Navigation:** switching views now crossfades with the browser's native
+  View Transitions API, timed to the app's existing easing. Feature-detected
+  and skipped under reduced motion, so unsupported browsers just keep the
+  instant swap they already had.
+- **Social sharing:** a real Open Graph/Twitter card image
+  (`public/og-image.png`), built to match the site's own look rather than a
+  generic placeholder.
+- **Mobile nav:** a fade hint on the right edge of the horizontally-scrolling
+  top nav, shown only while there's actually more to scroll to.
+
+### Changed (sixth revision)
+
+- **Interaction:** the pointer-tilt effect from the Home map atlas is now a
+  shared `useTilt` hook (`lib/hooks.js`), also applied to team cards' hover
+  watermark on the Teams page.
+
 ### Added (fifth revision)
 
 - **CI:** `.github/workflows/ci.yml` runs lint, build, Vitest, and Playwright

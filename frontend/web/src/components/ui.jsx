@@ -39,9 +39,9 @@ const SECTION_SIZE = {
   lg: 'text-2xl',
 }
 
-export function SectionHeader({ children, className = '', size = 'md', as: Heading = 'h2' }) {
+export function SectionHeader({ children, className = '', size = 'md', as: Heading = 'h2', ...rest }) {
   return (
-    <Heading className={`flex items-center gap-2.5 font-display font-semibold mb-3 ${SECTION_SIZE[size]} ${className}`}>
+    <Heading className={`flex items-center gap-2.5 font-display font-semibold mb-3 ${SECTION_SIZE[size]} ${className}`} {...rest}>
       <span
         className="w-2.5 h-2.5 shrink-0 rotate-45 bg-brand"
         style={{ boxShadow: '0 0 10px var(--color-brand-line)' }}

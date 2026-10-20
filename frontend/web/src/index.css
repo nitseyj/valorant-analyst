@@ -201,6 +201,16 @@
   }
 }
 
+/* Crossfades the whole page between views (see withViewTransition in
+   App.jsx), timed to match the rest of the app's motion instead of the
+   browser's default. Unsupported browsers never read these: the whole
+   feature no-ops without CSS doing anything. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /* Latest-series ticker. Pauses while hovered or focused, and fades at both
    edges so items slide in and out instead of cutting off. */
 @keyframes marquee {

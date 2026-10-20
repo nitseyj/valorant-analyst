@@ -1,33 +1,21 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import MapImage from './MapImage'
 import { Panel, Label, SectionHeader } from './ui'
-import { prefersReducedMotion } from '../lib/hooks'
+import { useTilt } from '../lib/hooks'
 
-// One map tile. The pointer tilts the tile toward itself by writing a
-// transform straight to the DOM, so moving the mouse never re-renders the grid.
+// One map tile. The pointer tilts the tile toward itself (see useTilt in
+// lib/hooks.js), by writing a transform straight to the DOM, so moving the
+// mouse never re-renders the grid.
 function AtlasTile({ map, share, selected, onSelect, delay }) {
-  const tiltRef = useRef(null)
-
-  function track(e) {
-    const el = tiltRef.current
-    if (!el || prefersReducedMotion()) return
-    const r = el.getBoundingClientRect()
-    const x = (e.clientX - r.left) / r.width - 0.5
-    const y = (e.clientY - r.top) / r.height - 0.5
-    el.style.transform = `perspective(700px) rotateX(${(-y * 8).toFixed(2)}deg) rotateY(${(x * 10).toFixed(2)}deg)`
-  }
-
-  function reset() {
-    if (tiltRef.current) tiltRef.current.style.transform = ''
-  }
+  const { ref: tiltRef, onPointerMove, onPointerLeave } = useTilt()
 
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={() => onSelect(map.map)}
-      onPointerMove={track}
-      onPointerLeave={reset}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
       className={`rise-in group relative min-h-[132px] overflow-hidden cut-corner-sm border text-left transition-colors ${
         selected ? 'border-brand-line' : 'border-line hover:border-ink-faint'
       }`}
