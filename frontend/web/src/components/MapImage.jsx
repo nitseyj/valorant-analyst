@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { MapGlyph } from './icons'
 
-// Original stylized map art (not real in-game callouts/screenshots — see
-// frontend/web/README.md) at public/assets/maps/<slug>.jpg. Falls back to
+// Original stylized map art (not real in-game callouts/screenshots: see
+// frontend/web/README.md) at public/assets/maps/<slug>.webp. Falls back to
 // the abstract MapGlyph icon if a file is ever missing.
 export default function MapImage({ map, className = '' }) {
   const [failed, setFailed] = useState(false)
@@ -26,7 +26,7 @@ export default function MapImage({ map, className = '' }) {
 
   return (
     <img
-      src={`/assets/maps/${map.toLowerCase()}.jpg`}
+      src={`/assets/maps/${map.toLowerCase()}.webp`}
       alt={map}
       loading="lazy"
       className={`object-cover ${className}`}

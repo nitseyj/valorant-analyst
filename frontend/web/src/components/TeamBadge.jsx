@@ -2,13 +2,17 @@ import { useMemo, useState } from 'react'
 import { slugifyTeam, teamInitials } from '../lib/format'
 
 const LOGO_DIR = '/assets/valorant/teams/'
-const EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'svg']
+// webp first: most logos have a same-name .webp sibling alongside the
+// original .png (see frontend/prototype/assets/valorant/teams/), generated
+// to cut load weight without touching the .png the legacy prototype still
+// depends on directly. png stays second so a team with no .webp still works.
+const EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg', 'svg']
 
-// Team logos aren't included in this repo (Riot IP — see README.md);
-// if you've legally sourced your own, drop them at
-// public/assets/valorant/teams/<slug>.<ext> and they're picked up
-// automatically. Falls back to a generated initials badge otherwise, or if
-// every extension 404s.
+// Team logos are third-party trademarks, not covered by this project's MIT
+// license - see the License section of the root README. Drop your own
+// legally-sourced logo at public/assets/valorant/teams/<slug>.<ext> and it's
+// picked up automatically. Falls back to a generated initials badge
+// otherwise, or if every extension 404s.
 export default function TeamBadge({ name, accent = 'brand', size = 40, className = '' }) {
   const slug = useMemo(() => slugifyTeam(name), [name])
   const [extIndex, setExtIndex] = useState(0)

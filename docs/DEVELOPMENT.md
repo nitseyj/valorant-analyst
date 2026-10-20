@@ -94,8 +94,9 @@ Pages reached through a list, such as Team Profile and Match Verdict, need
 their own steps when extending this suite: open a team or match from its
 list, then check the same things.
 
-**Backend tests:** `pytest` in `backend` (needs `pytest` and `httpx`
-installed, see `requirements_additions.txt`) runs `backend/tests/`. Pure
+**Backend tests:** `pytest` in `backend` (after `pip install -r
+requirements.txt`, which includes `pytest` and `httpx`) runs
+`backend/tests/`. Pure
 functions (`_parse_k`, `_impact_label`) are tested directly; anything that
 reads `match_verdict.build_verdict` or hits a FastAPI route uses the real
 `backend/data/valorant.db`, consistent with this project's rule against

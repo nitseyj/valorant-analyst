@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { RoleGlyph } from './icons'
 import { roleOf, ROLE_COLOR } from '../lib/roles'
 
-// Original stylized agent art (not real Riot character art — see
-// frontend/web/README.md) at public/assets/agents/<agent>.jpg. Falls back
+// Original stylized agent art (not real Riot character art: see
+// frontend/web/README.md) at public/assets/agents/<agent>.webp. Falls back
 // to the role-colored RoleGlyph icon if a file is missing (e.g. an agent
 // added to the game after this asset pack was made).
 // `fit` is 'cover' (crops to fill, the default) or 'contain' (the whole
@@ -29,7 +29,7 @@ export default function AgentImage({ agent, className = '', fit = 'cover' }) {
 
   return (
     <img
-      src={`/assets/agents/${agent.toLowerCase()}.jpg`}
+      src={`/assets/agents/${agent.toLowerCase()}.webp`}
       alt={agent}
       loading="lazy"
       className={`${fit === 'contain' ? 'object-contain' : 'object-cover'} ${className}`}

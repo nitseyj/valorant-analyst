@@ -87,9 +87,9 @@ src/
 
 public/assets/
   valorant/teams/   Team logos, copied from frontend/prototype/assets by the sync script (see below).
-  agents/           <agent>.jpg, full illustration
-  agents/profiles/  <agent>.jpg, square head-and-shoulders crop
-  maps/             <map>.jpg, 1600 by 900
+  agents/           <agent>.webp, full illustration
+  agents/profiles/  <agent>.webp, square head-and-shoulders crop
+  maps/             <map>.webp, 1600 by 900
   ui/               Background texture
 ```
 
@@ -121,9 +121,9 @@ These apply across every page, so new pages should follow them.
 
 Images are loaded by name from `public/assets/`:
 
-- `agents/<agent>.jpg` and `agents/profiles/<agent>.jpg` for each agent.
-  Names are lowercase, for example `sova.jpg`.
-- `maps/<map>.jpg` for each map, matching the database names in lowercase.
+- `agents/<agent>.webp` and `agents/profiles/<agent>.webp` for each agent.
+  Names are lowercase, for example `sova.webp`.
+- `maps/<map>.webp` for each map, matching the database names in lowercase.
 
 **Team logos** are tracked under `frontend/prototype/assets/valorant/teams/`.
 `scripts/sync-team-logos.mjs` copies them into `public/assets/valorant/teams/`

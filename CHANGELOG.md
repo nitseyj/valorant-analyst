@@ -6,6 +6,30 @@ not yet use version numbers.
 
 ## [Unreleased]
 
+### Added (fifth revision)
+
+- **CI:** `.github/workflows/ci.yml` runs lint, build, Vitest, and Playwright
+  for the frontend, and pytest for the backend, on every push and PR to
+  `main`. A status badge was added to the root README.
+- **Backend:** `backend/requirements.txt` (the real one; the old
+  `requirements_additions.txt`, a comment file nothing ever installed from
+  directly, is removed). Startup and error-path logging (`VALORANT_LOG_LEVEL`
+  env var), including the database path/reachability at startup and any
+  analyzers an endpoint had to skip. 45 new backend tests covering the 10
+  analyzer modules that previously had none: a shared-contract test for the
+  six `analyze_match` analyzers, plus dedicated tests for `meta_stats`,
+  `overview_stats`, `radar_stats`, and `roster_builder`.
+- **Frontend:** `index.html` now has a meta description and Open Graph /
+  Twitter Card tags, so sharing the live site shows more than a bare title.
+
+### Changed (fifth revision)
+
+- **Images:** agent art, map art, and the UI background texture are now
+  WebP instead of JPG (roughly 50% smaller). Team logos get an additive
+  WebP sibling alongside their original PNG (which the legacy prototype
+  still depends on directly): 1087 logos, 25MB of PNG mirrored at 11MB of
+  WebP. `TeamBadge` and `TeamWatermark` now try `.webp` before `.png`.
+
 ### Added (fourth revision)
 
 - **Home:** the spotlight match is now a match replay: an auto-playing,

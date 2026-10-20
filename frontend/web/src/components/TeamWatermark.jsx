@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { slugifyTeam } from '../lib/format'
 
 const LOGO_DIR = '/assets/valorant/teams/'
-const EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'svg']
+// webp first: see TeamBadge.jsx, which resolves logos the same way.
+const EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg', 'svg']
 
 // A large, faded team logo meant to sit behind a panel's content and be cut
 // off by the panel's edge, so only part of it shows. Purely decorative: it is

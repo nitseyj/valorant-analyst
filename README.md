@@ -1,5 +1,6 @@
 # Valorant Analyst
 
+![CI](https://github.com/nitseyj/valorant-analyst/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Backend](https://img.shields.io/badge/backend-FastAPI-009485)
 ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61dafb)
@@ -242,9 +243,9 @@ Images live under `frontend/web/public/assets/`:
 
 | Folder | Contents | Used by |
 |---|---|---|
-| `agents/<agent>.jpg` | Full agent illustration | Analytics, map lineups, verdict and lineup cards |
-| `agents/profiles/<agent>.jpg` | Square head-and-shoulders crop | Player profile icons |
-| `maps/<map>.jpg` | 16:9 map illustration, 1600 by 900 | Home, team profile, analytics, verdict |
+| `agents/<agent>.webp` | Full agent illustration | Analytics, map lineups, verdict and lineup cards |
+| `agents/profiles/<agent>.webp` | Square head-and-shoulders crop | Player profile icons |
+| `maps/<map>.webp` | 16:9 map illustration, 1600 by 900 | Home, team profile, analytics, verdict |
 | `valorant/teams/<slug>.<ext>` | Team logo, copied from `frontend/prototype/assets/valorant/teams/` at dev and build time | Team badges and watermarks |
 | `ui/` | Decorative background texture | Page background |
 

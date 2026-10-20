@@ -164,7 +164,7 @@
          keeps the art a quiet accent behind panels, not a wallpaper that
          competes with the data. */
       linear-gradient(rgba(10, 10, 13, 0.66), rgba(10, 10, 13, 0.66)),
-      url('/assets/ui/bg-texture.jpg'),
+      url('/assets/ui/bg-texture.webp'),
       linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
       linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
     /* Fixed to the viewport and cropped with `cover`, not tiled: the

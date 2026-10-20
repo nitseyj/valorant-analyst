@@ -21,8 +21,10 @@ endpoint reference):
 """
 
 import functools
+import logging
 import os
 import sqlite3
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +38,20 @@ from app.analyzers import match_timeline
 from app.analyzers import roster_builder
 from app.analyzers import meta_stats
 from app.analyzers import radar_stats
+
+# --------------------------------------------------------------------
+# Logging
+# --------------------------------------------------------------------
+# Plain stdout logging, no extra dependency: this is a single-process API
+# run with uvicorn, so a log handler that writes to stdout is all running it
+# locally or under a process manager (systemd, Docker, pm2) actually needs.
+# Level is configurable because a deployment that wants quieter logs (or
+# DEBUG for troubleshooting) shouldn't need a code change.
+logging.basicConfig(
+    level=os.environ.get("VALORANT_LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("valorant_analyst")
 
 # --------------------------------------------------------------------
 # Database
@@ -65,6 +81,7 @@ DB_PATH = Path(os.environ.get("VALORANT_DB_PATH", DEFAULT_DB_PATH))
 # just wait longer for a symptom, not remove the causes of the load.
 def get_connection() -> sqlite3.Connection:
     if not DB_PATH.exists():
+        logger.warning("Database not found at %s", DB_PATH)
         raise HTTPException(
             status_code=500,
             detail=(
@@ -80,6 +97,14 @@ def get_connection() -> sqlite3.Connection:
 # --------------------------------------------------------------------
 # App
 # --------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting Valorant Analyst API: database=%s, cors_origins=%s", DB_PATH, CORS_ORIGINS)
+    if not DB_PATH.exists():
+        logger.warning("Database not found at %s - endpoints that need it will return 500 until it exists", DB_PATH)
+    yield
+
+
 app = FastAPI(
     title="Valorant Analyst API",
     description=(
@@ -87,6 +112,7 @@ app = FastAPI(
         "economy, composition, and a combined ranked verdict on why a match went the way it did."
     ),
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Specific origins only, not a wildcard: allow_origins=["*"] would let any
@@ -215,9 +241,12 @@ def get_match_verdict(match_id: int):
     conn = get_connection()
     try:
         try:
-            return match_verdict.build_verdict(conn, match_id)
+            result = match_verdict.build_verdict(conn, match_id)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
+        if result.get("skipped_analyzers"):
+            logger.warning("match_id %s: analyzers skipped: %s", match_id, result["skipped_analyzers"])
+        return result
     finally:
         conn.close()
 

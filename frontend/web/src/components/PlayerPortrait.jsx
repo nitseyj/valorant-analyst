@@ -24,7 +24,7 @@ export default function PlayerPortrait({ agent = null, color = 'var(--color-ink-
         className={`inline-block shrink-0 rounded-full border-2 overflow-hidden bg-panel-raised ${className}`}
       >
         <img
-          src={`/assets/agents/profiles/${agent.toLowerCase()}.jpg`}
+          src={`/assets/agents/profiles/${agent.toLowerCase()}.webp`}
           alt={agent}
           loading="lazy"
           className="w-full h-full object-cover"
