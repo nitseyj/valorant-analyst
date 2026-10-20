@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getMeta } from '../lib/api'
 import { ROLE_COLOR } from '../lib/roles'
-import { useCountUp, useSlashToFocus } from '../lib/hooks'
+import { useCountUp, useFlipReorder, useRevealOnScroll, useSlashToFocus } from '../lib/hooks'
 import { Panel, Label, SectionHeader, EmptyState, Select, Skeleton } from '../components/ui'
 import AgentImage from '../components/AgentImage'
 import MapImage from '../components/MapImage'
@@ -351,6 +351,8 @@ function MapShowcase({ maps, value, onPick }) {
 // The full table. Column headers are sort buttons with aria-sort, and the
 // change column appears only when a baseline comparison is active.
 function AgentTable({ rows, showDelta, sortKey, onSort, featured, onPick }) {
+  const { ref: revealRef, revealed } = useRevealOnScroll()
+  const flipRef = useFlipReorder()
   const columns = [
     { key: 'rank', label: '#', sortable: false },
     { key: 'agent', label: 'Agent', sortable: true },
@@ -361,7 +363,7 @@ function AgentTable({ rows, showDelta, sortKey, onSort, featured, onPick }) {
   ]
   const scaleMax = Math.max(0.0001, ...rows.map((r) => r.pick_rate))
   return (
-    <div className="overflow-x-auto">
+    <div ref={revealRef} className={`reveal-group ${revealed ? 'is-revealed' : ''} overflow-x-auto`}>
       <table className="w-full min-w-[560px] border-collapse text-sm">
         <caption className="sr-only">Agents in this scope. Use the column headers to sort.</caption>
         <thead>
@@ -391,6 +393,7 @@ function AgentTable({ rows, showDelta, sortKey, onSort, featured, onPick }) {
             return (
               <tr
                 key={a.agent}
+                ref={flipRef(a.agent)}
                 onClick={() => onPick(null, a.agent)}
                 className={`rise-in border-t border-line-soft cursor-pointer transition-colors ${on ? 'bg-brand-dim' : 'hover:bg-panel-raised'}`}
                 style={{ animationDelay: `${Math.min(i * 20, 400)}ms` }}
