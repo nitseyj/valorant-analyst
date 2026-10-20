@@ -247,8 +247,12 @@ export default function MatchVerdict({ matchId }) {
       <Panel accent={primaryColor} className="relative overflow-hidden p-6 md:p-8 mb-6 rise-in">
         <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-brand" aria-hidden="true" />
         <Label className="mb-5">Match verdict{m.tournament ? `, ${m.tournament}` : ''}</Label>
-        <div className="grid md:grid-cols-[1fr_auto_1fr] items-center gap-6">
-          <div className="flex items-center gap-4 min-w-0">
+        {/* Keyed on matchId: switching matches remounts this block fresh, so
+            the versus entrance (team names sliding in from opposite sides,
+            the score popping in once they meet) replays for the new match
+            instead of only ever playing once for the first one shown. */}
+        <div key={matchId} className="grid md:grid-cols-[1fr_auto_1fr] items-center gap-6">
+          <div className="vs-in-left flex items-center gap-4 min-w-0">
             <TeamBadge name={m.team_a} accent="brand" size={68} />
             <div className="min-w-0">
               <h1 className="font-display text-2xl md:text-3xl font-bold truncate flex items-center gap-2">
@@ -258,12 +262,12 @@ export default function MatchVerdict({ matchId }) {
               <Label className="mt-1">Team A</Label>
             </div>
           </div>
-          <div className="font-mono text-4xl md:text-5xl font-semibold tabular-nums text-center" style={{ textShadow: '0 0 26px var(--color-brand-line)' }} aria-label={`${scoreA} to ${scoreB}`}>
+          <div className="vs-pop font-mono text-4xl md:text-5xl font-semibold tabular-nums text-center" style={{ textShadow: '0 0 26px var(--color-brand-line)' }} aria-label={`${scoreA} to ${scoreB}`}>
             <span aria-hidden="true">
               {Math.round(animatedA)} <span className="text-ink-faint">:</span> {Math.round(animatedB)}
             </span>
           </div>
-          <div className="flex items-center gap-4 min-w-0 md:flex-row-reverse md:text-right">
+          <div className="vs-in-right flex items-center gap-4 min-w-0 md:flex-row-reverse md:text-right">
             <TeamBadge name={m.team_b} accent="team-b" size={68} />
             <div className="min-w-0">
               <div className="font-display text-2xl md:text-3xl font-bold truncate flex items-center gap-2 md:flex-row-reverse">

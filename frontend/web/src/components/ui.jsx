@@ -201,7 +201,7 @@ export function Select({ value, onChange, options, placeholder, className = '' }
 // Skeleton blocks shaped like the content they stand in for, so the layout
 // does not jump when data arrives (preferred over a generic spinner).
 export function Skeleton({ className = '' }) {
-  return <div className={`bg-line-soft animate-pulse ${className}`} />
+  return <div className={`skeleton-shimmer ${className}`} />
 }
 
 export function EmptyState({ children }) {

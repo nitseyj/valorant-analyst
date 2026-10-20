@@ -8,6 +8,15 @@ not yet use version numbers.
 
 ### Added
 
+- **Motion:** Match Verdict's header now plays a broadcast-style versus
+  entrance: the two team names slide in from opposite sides and the score
+  pops in once they meet, replaying on every match switch (keyed on
+  `matchId`) rather than only the first time the page mounts. Every
+  clickable control (not just the ones with their own hover effect) now
+  gives tactile feedback on press, via `filter: brightness()` so it layers
+  cleanly over an existing hover `transform` instead of competing with it.
+  Loading skeletons (`Skeleton` in `ui.jsx`) sweep with a moving shimmer
+  band instead of a flat pulse.
 - **Motion:** `useRevealOnScroll` (`lib/hooks.js`) reveals a long list the
   moment it actually scrolls into view, instead of animating on mount where
   a list past the fold (Teams, Matches, Players, Analytics) finished its
